@@ -29,6 +29,9 @@ from gen_levels import EMPTY_PIC
 sys.stdout.reconfigure(encoding='utf-8', errors='replace')
 HERE = os.path.dirname(os.path.abspath(__file__))
 OUT = os.path.abspath(os.path.join(HERE, '..', 'pack'))
+# The same ten levels unpacked: readable, diffable JSON. Generated output,
+# not input - edit a picture's ASCII grid above and rebuild.
+JSON_OUT = os.path.abspath(os.path.join(HERE, '..', 'levels-json'))
 
 # ------------------------------------------------------------------ pictures
 
@@ -384,6 +387,7 @@ def build(name, diff, nq, art, legend):
 
 def main():
     os.makedirs(OUT, exist_ok=True)
+    os.makedirs(JSON_OUT, exist_ok=True)
     blobs, man = [], []
     for i, (name, diff, nq, (art, legend)) in enumerate(PACK, 1):
         lvl, npass, late = build(name, diff, nq, art, legend)
@@ -401,6 +405,11 @@ def main():
         # would make every rebuild produce a different pack and a noisy diff.
         blob = gzip.compress(raw, 9, mtime=0)
         blobs.append('gzip:' + base64.b64encode(blob).decode())
+
+        with open(os.path.join(JSON_OUT, '%d.json' % i), 'w',
+                  encoding='utf-8') as fh:
+            json.dump(lvl, fh, ensure_ascii=False, indent=1)
+
         man.append({'n': i, 'd': diff, 'slots': 5, 'lim': 5,
                     'px': len(pid['pixels']), 'name': name, 'f': {}})
         nsh = sum(len(q['shooters']) for q in lvl['QueueGroup']['shooterQueues'])
@@ -418,6 +427,7 @@ def main():
     path = os.path.join(OUT, 'levels.js')
     open(path, 'w', encoding='utf-8').write(js)
     print('\nwrote %s  %.1f KB' % (path, len(js.encode('utf-8')) / 1024))
+    print('unpacked copies in %s' % JSON_OUT)
 
 
 if __name__ == '__main__':
