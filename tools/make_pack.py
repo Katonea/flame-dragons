@@ -410,6 +410,11 @@ def main():
                   encoding='utf-8') as fh:
             json.dump(lvl, fh, ensure_ascii=False, indent=1)
 
+        # what the game loads is the blob, so prove the blob still decodes to
+        # the level that was just built. Both outputs come from this same
+        # object, so the readable copy cannot describe anything else.
+        assert json.loads(gzip.decompress(blob)) == lvl, (i, name)
+
         man.append({'n': i, 'd': diff, 'slots': 5, 'lim': 5,
                     'px': len(pid['pixels']), 'name': name, 'f': {}})
         nsh = sum(len(q['shooters']) for q in lvl['QueueGroup']['shooterQueues'])
