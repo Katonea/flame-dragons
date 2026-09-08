@@ -1,0 +1,2828 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>Flame Dragons</title>
+<style>
+  /* Flame Dragons. Every pixel of art in this build is drawn by code - the
+     sprites are canvas paths (see the `art` module), the lobby and the shop
+     are CSS gradients and clip-paths. No image file is loaded anywhere. */
+  :root{
+    --bg:#120d1c; --panel:#1d1630; --panel2:#2a2044; --line:#3d2f5e;
+    --txt:#f1ecff; --dim:#a394c4; --bad:#ff6b8a; --good:#5ee0a8;
+    --accent:#7dd3fc; --gold:#ffcf5c;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%}
+  body{
+    background:var(--bg); color:var(--txt); overflow:hidden;
+    font:13px/1.4 "Segoe UI",system-ui,sans-serif;
+    display:flex; flex-direction:column; align-items:center;
+    -webkit-user-select:none; user-select:none; touch-action:manipulation;
+  }
+  button{
+    font:inherit;font-weight:600;color:var(--txt);background:var(--panel2);
+    border:1px solid var(--line);border-radius:9px;padding:5px 9px;cursor:pointer;
+  }
+  button:hover{background:var(--line)}
+  button:disabled{opacity:.4;cursor:default}
+  input{
+    font:inherit;width:58px;text-align:center;color:var(--txt);
+    background:var(--panel);border:1px solid var(--line);border-radius:9px;padding:5px;
+  }
+  /* ------------------------------- game ------------------------------- */
+  body.meta #top, body.meta #stage, body.meta #legend{display:none}
+  body:not(.meta) #home{display:none}
+  #top{width:100%;max-width:560px;padding:8px 10px;display:flex;gap:6px;align-items:center;flex:0 0 auto}
+  #top .grow{flex:1}
+  #meta{font-size:12px;color:var(--dim);white-space:nowrap}
+  #stage{position:relative;flex:1 1 auto;width:100%;max-width:560px;min-height:0}
+  canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
+  #overlay{position:absolute;inset:0;display:none;place-items:center;background:rgba(12,8,20,.86);z-index:5}
+  #overlay.on{display:grid}
+  #card{
+    background:linear-gradient(160deg,var(--panel2),var(--panel));
+    border:1px solid var(--line);border-radius:18px;
+    padding:22px 26px;text-align:center;min-width:250px;
+  }
+  #card h2{margin:0 0 6px;font-size:22px}
+  #card p{margin:0 0 16px;color:var(--dim)}
+  #legend{
+    width:100%;max-width:560px;flex:0 0 auto;padding:4px 10px 8px;
+    display:flex;flex-wrap:wrap;gap:5px;font-size:11px;color:var(--dim);
+  }
+  .chip{display:flex;align-items:center;gap:4px;background:var(--panel);
+    border:1px solid var(--line);border-radius:999px;padding:2px 7px}
+  .sw{width:10px;height:10px;border-radius:3px}
+  /* -------------------------------- home ------------------------------- */
+  #home{
+    position:relative;width:100%;max-width:560px;flex:1 1 auto;min-height:0;
+    display:flex;flex-direction:column;
+    background:
+      radial-gradient(120% 60% at 50% -10%, #33245c 0%, transparent 60%),
+      linear-gradient(#1a1230, #120d1c 70%);
+  }
+  #hdr{
+    flex:0 0 auto;display:flex;align-items:center;gap:7px;padding:8px 10px;
+    background:linear-gradient(#2b2049,#221a3a);
+    border-bottom:1px solid var(--line);
+  }
+  .cur{
+    display:flex;align-items:center;gap:4px;padding:3px 10px 3px 4px;border-radius:999px;
+    background:rgba(0,0,0,.3);border:1px solid var(--line);
+    font-weight:700;font-size:12px;
+  }
+  .cur img{width:18px;height:18px}
+  .cur.g{color:var(--gold)} .cur.h{color:#ff8fa3} .cur.s{color:var(--accent)}
+  #avatar{
+    width:38px;height:38px;flex:0 0 auto;border-radius:12px;
+    background:linear-gradient(150deg,#4b3780,#2a1f47);
+    border:1px solid var(--line);display:grid;place-items:center;
+  }
+  #avatar img{width:30px;height:30px}
+  #scroll{flex:1 1 auto;overflow-y:auto;overflow-x:hidden;position:relative}
+  #tree{position:relative;width:100%}
+  #tree .band{position:absolute;left:0;right:0}
+  #tree .spine{
+    position:absolute;left:50%;width:8px;margin-left:-4px;border-radius:4px;
+    background:linear-gradient(rgba(255,255,255,.16),rgba(255,255,255,.05));
+  }
+  .nd{position:absolute;left:50%;width:78px;height:86px;margin-left:-39px;cursor:pointer}
+  .nd .hex,.nd .hexIn{
+    position:absolute;clip-path:polygon(50% 0,100% 25%,100% 75%,50% 100%,0 75%,0 25%);
+  }
+  .nd .hex{inset:0;background:#0c0817}
+  .nd .hexIn{
+    inset:4px;background:linear-gradient(155deg,var(--c1),var(--c2));
+    display:grid;place-items:center;
+  }
+  .nd .num{
+    position:relative;font-weight:800;font-size:16px;color:#fff;
+    text-shadow:0 2px 3px rgba(0,0,0,.55);
+  }
+  .nd .pips{position:absolute;left:0;right:0;bottom:13px;display:flex;justify-content:center;gap:3px}
+  .nd .pips i{width:4px;height:4px;border-radius:50%;background:rgba(255,255,255,.85)}
+  .nd.cur{filter:drop-shadow(0 0 8px var(--accent)) drop-shadow(0 0 18px rgba(125,211,252,.55))}
+  .nd.cl .hexIn{filter:saturate(.35) brightness(.62)}
+  .nd .done{position:absolute;right:2px;top:4px;width:22px;height:22px}
+  .nd:active{transform:scale(.94)}
+  #nav{
+    flex:0 0 auto;display:flex;gap:4px;padding:6px;
+    background:linear-gradient(#221a3a,#191230);border-top:1px solid var(--line);
+  }
+  #nav .nv{
+    flex:1;text-align:center;padding:8px 0 6px;border-radius:11px;
+    font-weight:700;font-size:12px;color:var(--dim);cursor:pointer;
+    border:1px solid transparent;
+  }
+  #nav .nv.sel{
+    color:#fff;border-color:var(--line);
+    background:linear-gradient(#3a2b63,#2a1f4a);
+  }
+  /* ------------------------------ overlays ----------------------------- */
+  .sheet{position:absolute;inset:0;z-index:8;display:none;background:rgba(10,7,18,.78);place-items:center}
+  .sheet.on{display:grid}
+  .panel{
+    position:relative;width:min(360px,90%);max-height:84%;overflow:auto;
+    border-radius:20px;padding:16px;
+    background:linear-gradient(165deg,#33265c,#201839);
+    border:1px solid var(--line);box-shadow:0 16px 40px rgba(0,0,0,.5);
+  }
+  .panel h3{margin:0 0 2px;font-size:17px;text-align:center}
+  .panel .sub{margin:0 0 12px;font-size:11px;color:var(--dim);text-align:center}
+  .closeX{
+    position:absolute;right:10px;top:10px;width:26px;height:26px;border-radius:50%;
+    border:1px solid var(--line);background:rgba(0,0,0,.3);color:var(--txt);
+    font-weight:800;cursor:pointer;line-height:1;padding:0;
+  }
+  #cdArt{display:block;width:74px;margin:-52px auto -2px}
+  #cdNo{font-size:21px;font-weight:800;text-align:center}
+  #cdDiff{
+    display:block;width:fit-content;margin:6px auto 8px;padding:3px 14px 4px;
+    border-radius:999px;font-weight:800;font-size:11px;color:#160f22;
+    background:linear-gradient(var(--c1),var(--c2));
+  }
+  #cdStats{font-size:12px;color:#cdbff0;text-align:center;margin-bottom:9px}
+  #cdFeats{display:flex;flex-wrap:wrap;gap:4px;justify-content:center;margin-bottom:13px}
+  .fchip{
+    display:flex;align-items:center;gap:3px;background:rgba(0,0,0,.28);
+    border:1px solid var(--line);border-radius:999px;padding:2px 8px 2px 3px;
+    font-size:11px;font-weight:700;
+  }
+  .fchip img{width:19px;height:19px}
+  .play{
+    display:block;width:100%;padding:12px 0;border:0;border-radius:14px;
+    font-size:16px;font-weight:800;color:#10240f;cursor:pointer;
+    background:linear-gradient(#8ef2b0,#3fbf7a);
+    box-shadow:0 4px 0 #2b8f59;
+  }
+  .play:active{transform:translateY(2px);box-shadow:0 2px 0 #2b8f59}
+  .shopRow{
+    display:flex;align-items:center;gap:10px;padding:9px;margin-bottom:7px;
+    border-radius:14px;background:rgba(0,0,0,.22);border:1px solid var(--line);
+  }
+  .shopRow img{width:38px;height:38px;flex:0 0 auto}
+  .shopRow .nm{font-weight:700}
+  .shopRow .ds{font-size:11px;color:var(--dim)}
+  .shopRow .own{font-size:11px;color:var(--accent)}
+  .buy{
+    margin-left:auto;flex:0 0 auto;display:flex;align-items:center;gap:4px;
+    padding:7px 11px;border:0;border-radius:11px;font-weight:800;color:#2a1c00;
+    background:linear-gradient(#ffdd8a,#f0b429);box-shadow:0 3px 0 #b07d10;cursor:pointer;
+  }
+  .buy:disabled{background:#4a3f66;color:#8d81ab;box-shadow:none}
+  .buy img{width:15px;height:15px}
+.nd .ndName{position:absolute;left:50%;top:50%;transform:translate(56px,-50%);
+  white-space:nowrap;font-size:13px;font-weight:700;color:#cfc7e6;
+  text-shadow:0 1px 3px #000;pointer-events:none}
+.nd.cl .ndName{color:#8ee6a6}
+</style>
+</head>
+<body>
+
+<div id="home">
+  <div id="hdr">
+    <div id="avatar"></div>
+    <span class="cur h"><img id="icHeart"><span id="cHeart">5</span></span>
+    <span class="cur g"><img id="icGold"><span id="cGold">0</span></span>
+    <span class="cur s"><img id="icStar"><span id="cStar">0</span></span>
+    <span style="flex:1"></span>
+    <button id="reset" title="진행도 초기화" style="padding:3px 8px;font-size:11px">초기화</button>
+  </div>
+
+  <div id="scroll"><div id="tree"></div></div>
+
+  <div id="nav">
+    <div class="nv sel" id="nvMap">맵</div>
+    <div class="nv" id="nvShop">상점</div>
+  </div>
+
+  <div class="sheet" id="cardSheet"><div class="panel">
+    <button class="closeX" id="cdClose">×</button>
+    <img id="cdArt">
+    <div id="cdNo"></div>
+    <span id="cdDiff"></span>
+    <div id="cdStats"></div>
+    <div id="cdFeats"></div>
+    <button class="play" id="cdPlay">PLAY</button>
+  </div></div>
+
+  <div class="sheet" id="shopSheet"><div class="panel">
+    <button class="closeX" id="shClose">×</button>
+    <h3>상점</h3>
+    <p class="sub">골드는 클리어로 벌고 여기서 파워업으로 바꾼다. 결제는 없다.</p>
+    <div id="shopList"></div>
+  </div></div>
+
+</div>
+
+<div id="top">
+  <button id="toHome" title="로비로">&#8962;</button>
+  <button id="prev">&#9664;</button>
+  <input id="lvl" type="number" min="1" max="10" value="1">
+  <button id="next">&#9654;</button>
+  <button id="retry">↻</button>
+  <button id="mode" title="가림: 지나가는 줄의 가장자리 첫 픽셀만 보이고 그게 자기 색일 때만 쏜다. 전체: 가림 무시">가림</button>
+  <span class="grow"></span>
+  <span id="meta"></span>
+</div>
+
+<div id="stage">
+  <canvas id="cv"></canvas>
+  <div id="overlay"><div id="card">
+    <h2 id="title"></h2><p id="sub"></p><button id="act"></button>
+    <button id="ovHome" style="margin-left:6px">로비</button>
+  </div></div>
+</div>
+
+<div id="legend"></div>
+
+<script>
+/* The ten pictures of this build, drawn by hand as ASCII grids and
+   generated by tools/make_pack.py. Nothing here comes from another
+   game's level data. Each entry is gzipped JSON, base64'd, which
+   fetchLevel already knows how to read. */
+const PACK = ["gzip:H4sIAEUPoGoC/51YXW/iOBT9K5Wfo5UdSkt4G9pqOtqptis6213NzoNJDPGSxMhxpkWo/30d2wkMw6CcvsD9OMe+vufGiOzIrVwuZdoUZkum5I7XWxKRe14/yVJ8lqU0ZLrkRS0ichChEZkXytyoprLeOCI3qvoutkqHvI382YhGfNSq2ZDpjtS5UkZoF6zJ9Gsf8U7JrSl5QaYsjggvS0Wm8SgiMrN7vUXnAaO3by3kVwuOOzxLPJ4dLfgT4PLsgkkHn3h0bNEWT+aN3mhZi3lP25G9/bWF2C5VIjUiO8SEoFRVB/us0vUpenAf5Ua4dDBc7t7WdHrT4H5KxazoFu4sX1XOZXVUUxvq8rOmKJ5sqnSpznKph6aW6ZPaPvCiEMble9Nv3k4JX/l6g+ESH2qjVcUbc75dbqhulfL5YLjko3wVxafSLnnLDW+za7F1qN/dtwPVQRMH9lscRRxs0zon27qysrvgR2+44Is9ogs+e8NvVfG1h86D5cJitZqpV5+46+39rj/I8ngU2cOelcqOcIehPfBGFb9o2EoVmahsDf48B55LL2SdNtJrOOttf7RNIc0fi//slPoD/uA7SLNULvXFfftymnKzdlNkC+5tl0obbXhI3fS238uPwMmZSduz9YN6ErIQPHOXjj/HgefSpb3m5LxX6uHQ7fhVr9ds7wS2n/bA7R1fnFZ1vVAvvqS945I8TZXO/CO+Ix8OPL8wN3qr6nzNwyN04AYFeCrqXG5C//eeH0iZmdzeX5cRyYVc5cbbm3xra+TFs0+Pf6P72H3A+WD3MOzIq73QImJ/CtgoOr51teB/W9Nb/4SL1BJGKIFRmMFghifEgwkxShihhEuUkKCErrEx3FiAATcqFMVQ7RiqHUO1Y6h2wwljlDBBCQncVlwIWAkGS8FG7xwPio4HRceDouNB0fGg6HhQdDwoPB4UHg8KjweqXQJKl4DKJaBwCahbAsqWoKolqGhohyZgh4bjr37GJ2fg1xh8AlaTvKv6a6z6wXC/+hW2+hW2+hhbfTDcz8FldPxf+3w1w/HXIH4C4hMQH57E4QT/YI0G48cg/grEX4P4CYhPQHxoKEBgIMH/WMSgYjGoWAwqFoOKxaBiMahYjCoWo4oBhPhdkjFQMgZKxkDJGCgZAyVjqGQMlQztKAU7SsGOUrCjFOwoRTs6hPAtvHu5F7wwefc6R9Z/8aJ9tWx0IyLyvXV4+4L4TuvwPq/lpabRgkzJv01K04n9jJcJsYs3JlfaxjPNX6qLpdIXJpf1xaKRRUbe/geTbykv8RcAAA==", "gzip:H4sIAEUPoGoC/52a227bOBCGXyXgtbHQWZTv6iRoijbYLJzd7KLtBS3TFmtZNHRoYhh596VISj7EjfX3ppnDT5Gc+awUE+/IjVgsRNrk9ZaMyS2rtmRE7lj1KNb8i1iLmowXLK/4iBxEnBGZ5rK+lk2hvHBErmXxk29lafMq8lfDG/6xlM2GjHekyqSseamDFRl/7SPGWTNlCpaTsTcibL2WylCWmKutXkfv5v0L+ej1e6v4xXZRJ3dDI3ePH/cmH1zYLn53O9rJqVF7F54WXshTtZvaj0ybclOKik/7bXdkb39tJapDBU9rPj/U2KCQRSf7ItPVueXWfRAbrtPW0Lk7dajzm1r3U8oneffgzjKnypgoTs7Uhrr8pMnzR5Va61Rn6dR9U4n0UW7vWZ7zWud702zeEsqW5rzW0IkPVV3KgjX1++XSQN9IafLW0MkH8cLzT2v1yBtWsza74lut+qx/alFle6LFZouTiJZtWudsWZeq7zr40Rg6+KyuqINPxjBbFWxlpFNr6TBfLifyxSRue3u/61FbHk4ie9mTlPMT3WFoL7yW+S8KtpT5nBfqDOY+B55Oz0SVNsL0cNLb5mqbXNR/zn4oSs0Fj3wtaRZSp/7WP81xmvVmpSlSB+5tnUqbsmY2dd3bZi+DwFlm0vZuPahnJTPO5vqFZ+5x4On0Wr1ixbTv1P2h260v+n5N9o5dbWi3a3vHHK6UVTWTz+ZIe0cnWZrKcm4+4jvy4cAzD2Z1uZVVtmL2I3Tg2g6wlFeZ2Nj67z0DpJjXmXo/BiOScbHM1NvfVW+3TbZVZ2T5k0mHfzj72J3VmWD3YdiRF/2+Vb+G3Hh08tYrOftXxY31n31NK30M6kOjj4bqI1Afg3oK6gOjD8H7huB9Q/C+IXjfwfoE1Nv6BGB9ArA+AVifAKxPANZnsN43eh+spw/W0wfr6YP19MF6+mA9B+tdB1zgGb0HNswDG+aBDfPAhnlgwzywYR7YMA9t2PAFLrjAdtgFO+yCHXbBDh/p6eUOD9bH4HkoqE9AfddhF+3w8AVG74BEOCARDkiEAxLhgEQ4IBEOSIQDEuGgRDgoEcMXoC02GyQYQQkGUILxk2D4JBg9CQZPgrGTYOgkIDkJCE4CcjNYb45DMcooRhnFKKMYZRSjjGKUUYwyilFGMcooSBkFKaMgZcP1YGfN8WOMyhijMsaojDEqwflBjP1vGZxmxBiVMUZlDFIZg1TGIJUxSGWMURlhVEYYlRFGJTjmiTAqwaEWONMCR1oRRmUEUhmBVEYglRFIZYRReTTPii5SGWJUhhiV4HANnD2Co0dw8ggOHsG5YwhSGYJUhiCVIUjlYMzM8QOMysFy7638MpUBRiU48QUHvuC8Fxz3gtPeAKQyAKkMQCqHY+P/DmY+htlguY/Jg7fyy5iBc3BwDA5OwcEhODoDH1xJF+yr6/0OBx7GgYdxMFgeYvIIk8eYnGLyBJNbDjyQA7DyLlZ5F6u8i1XexSrvYpUHz+5gZx8g/27/PH/HWV5n3V/8RfUPy9tvH9Vlw0fkZ+uw9jtEt2Vpv/LRrkvrpuRkTL41s5mfqn9TL/nWpNGMErVFU2eyVNl5yZ6Lq4Usr+pMVFezRuRz8vo/G9oqfpYmAAA=", "gzip:H4sIAEUPoGoC/52aXXPaOBSG/0pG156Ov2Rj7kqSaTrbzGaHdLM7bS+ELbAWYzH+aMIw+e8rS7IhlCR+e8XROa++fB4JOLAnV2K5FGlbNDsyJdes3hGH3LD6Xmz4F7ERDZkuWVFzhxx5XIfMC9lcyrZULeqQS1n+5DtZ2bjy/NXyln+qZLsl0z2pcykbXmlnTabfBo9pbJgyBSvIdOIQttlIMvV9h4hMTfXsvBkP3olHzz86xSvThYPcM3Lv5XC/xMN3povfnM4Pen1o5P47w1E1nBqQzNtqW4maz4dx9+Rgf+skKgUlTxueHWusU8iyl32R6fpcd9u8E1uuw9bQsRu1qPOT2ubnlM+KfuDeMqvKmShP1tS5+visLYp7FdroUG/p0G1bi/Re7m5ZUfBGxwfTTN4hyFZmvdbQgY91U8mStc3bj0sTeyWliVtDB+/EEy8+b9SQV6xhXXTNd1r1h37VotrmRIvNFCceLdt2jbOPdaXyrp2fjKGdj2qL2vlgDDNVydZGOreWdvPVaiafTOB6sA+zvkjL3YnnIHuQMjvRHbsOwktZvPLAVrLIeKnWYPZz1NLhhajTVpgczgbbbG1biObPxX+KUrPBF20taZdSh77qV7OcdrNda4rUggdbh9K2apgNXQ62mcsgcJaZtNvbAOpZyYKzTN9oZh9HLR3eqDtUzIdM3R43+/7lkK/ZoWF7G9pt36FhFlfJul7IR7OkQ0MHWZrKKjNHfE8+HrXMwKypdrLO18weoaOmzQBLeZ2LrX3+h5YBUmRNri5GdTflXKxydb17scpAvlNrZMWDCdMP7sF3Y3XG2R+GPXnSN5x6n/Ei5+TWqzj7R/mN9a+9h5U+AfV2fAqOP1ofG30IricE1zNa77lgB7uBANxAAG4gQDcwukNk9D64YR/csA9u2Ec3PL6DB3awE3jOyQeZVycA9T6oD0B9COopqI/O6EcQ5IEEeSBBHkqQhxI0vgOaYg/NsYcm2UOz7EVoh/j3zo0LnhsXPDcueG5c8Ny44M3rgufGBc+NC54bFz03LnpuXPTcjO+A5thDk+xRtEP0W1gnGNUJBnWCMZ1gSCcY0QkGdILxnIA4JyDNCQhzArKcgCgnIMkgaJOxyw8xOcXkESaPMfnkV7kuNb1N2ni9RW0CojYBUZuAqI3Xg8k1w8cYOjGGToyhE2PoxBg6MYhOjKITg+jEIDoxiE4MojNab5YTYaRFGGkRRlqEkRZhpIGlGbDyE4HvhhHIWQRyFoGcRSBn4/Vgbs3yKcYlxbikGJcU4xKs0VGMS7BiSEEuKcglBbmkIJcU5JKCXFKMyxDjMsS4DDEuQ4xLsPSKlnZDkJwQJCcEyQlBckKQnPF6LQ8w0AIMtAADLcBAC8BUBWCqAjBVAZiq8foI1Gu5j1UgfOyLoY9VIHywFOqDX4N98GuwD9ZzfLCqCRY1wZomWu5Cq11osQvbLVp8G6H/YX8oveGsaPL+t1dR/82K7n8gTdVyh/zsGqz7N8d1Vdkf37t+adNWnEzJ93aRpiFRw7ZNLivlySr2WF4sZXXR5KK+WLSiyMjz/+tpQ3/1IwAA", "gzip:H4sIAEUPoGoC/5WbXW/bNhSG/0qga2MQZfFDuWvSoinWYBnSrRvaXjCyEmuRLUMfbYKg/30ySX80cGI9VyF53lcixfNIQHj8FL0tb2/LvK+6x+g0uixmZb+IJtGFbT+Vi+JjuSi76PTWVm0xifZG4kl0XdXded0vh56cROf18nvxWDchPoz82Rd98b6p+1V0+hS187ruisYNttHpl+2I7yzs0Cxt5a5sF4s6Ok3EJCpnw8DPyX5cyI1A+fj01/jOH/u4OhLPjsRF8vPbWvLCfJNka0iD4aULhgWlR26oj00ofnVCQm0MIjyh5MiE5JEbmmMTEsOEhilF132zasq2uN7O7Cnatb+sJUOeLIu8K2b7mjBY1suN7GOd3x+yh+5VuSpcODRc7GKY1eGbhu6HvDirNhfetPys5rZcPpvTemgTP+ur6tMQWrjQpuVCl31b5p/qx0tbVUXn4tumv/maE3vn5xsaLvCm7Zp6afvu9cflsHpb1z4eGi54VT4U1YfFcMm3trPr6H3x6FS/u79O1IY9cWJ/i2cjTrZadw4+1rth493ge99wgz+GJbrBz77hb7W09156HVpuuLi7O6sffODdtr276y/bcvVsZCf7XNezZ7r9oZ3wvK5eeGB3dTUrlsMc/Hr2ei58U7Z5X/o9PNu2/dJWVdn9cfPfkKV+gb/0naS/rV3oL/fXT6dfrO5dFg0T3rZdKO+bzobQ+bbt7+VT4GDO5Ou1bRP1oOSmsDP32vXr2Ou58GJ41ZfX25263O9u/Mvtfp3tOsHtsz14tx0/uaZu25v6h5/SruOCNs/rZuYRf4re7PX8hW3XPNbt/N4GhPa6YQdsXrTzchWe/67nE7KcdfPhVZRNonlR3s2Hb5Awww7MH4c52uqzD8vf4t3YRdD5wQ0MT9HD8E2YRMPnUOjJ8w9PU9h/hqZv/Rve9Q/rdzJ1hFsofAvgSA851GsOiR2KOsLCJV44cCSHHK8uY4odKXZI7FDYoakjLCOdPPvCv6SXUK+gXkO9gfoM6jfZN94gqCE5YBiVrSnO1hRna4qzdbwjLHw69klNoT6Fegn1Cuo11Buoz6B+k9tTmttTmtvjDXSPxaFNHpXZwOENydg5JVA/hfoU6iXUK6jXUG+gPoP6TV4nNK8TmtcJzeuE5vV4A91lQbc5PCQBMRAQAwExEBADATEQEAMBMRAQA0ExEBQDQTEQFANBMRAUA0ExGG84tM/u34AvOcI+xBC0GIIWQ9BiCFoMQYshaDEELYagxRC0mIIWU9BiClpMQYspaDEFLaagxRS0eDRowlCH37mMkZkxMDPGZcawzBiVGYMyY0xmDMmMEZlBIDPIYwZxzCCNGYQxgyxmEMUMkphREDPIoWEcGsahYRwaxqFhHBrGoWEcGsahYRwayKGBHBrIoYEcGsihgRwayKGBHBrKoYEcasahZhxqxqFmHGrGoWYcasahZhxqxqGGHGrIoYYcasihhhxqyKGGHGrIoaYcasihYhwqxqFiHCrGoWIcKsahYhwqxqFiHCrIoYIcKsihghwqyKGCHCrIoYIcKsohMDi9ZGBJBpZkYEkGlmRgSQaWZGBJBpaEYEkIloRgSQiWhGBJCJaEYMnxea+pwVCD06eMrJSRlTKyYBEErIGAJRCwAgIWQND6B1r+QKsfUkhWCslKIVkpJCulZI03+AcEiyRgjQQskYAVErBAAtZHwPIIWh1BiyNobQQtjaCVEVOY+dPxmaygwS8AljnAKgdY5ABrHGCJA6xwoAUOtL6BljfQ6gZa3JCMTzUJDeE0C55YwgNLeF4JjyvhaSU9rKRnlfSocvzeTqHBP314WgwPi+FZMT0qBkeaYrThWyhjvyhs1c03lfFl+7et1j/T6Zq+mETf1x27/q3Nu6YJP41Y+/Kub4roNPra57HNv/Y2v82j4eJ9N6+bYXzW2B/Lk9u6OenmZXty05fVLPr5P1WHDBxANgAA", "gzip:H4sIAEUPoGoC/52bXW/bNhiF/0qha2MgKeqDuWvSoinWYB3SrRvaXiiyEmuRLUMfa4Og/30USX/ETRo/uzLJ9xzxlc45smJE99Gr+vq6LsdmuItOootqXo/LaBadF/2Helm9q5f1EJ1cF01fzaK9FTGLLpt2OGvHlZ0ls+isXf1b3bVdqNuV38dqrN507biOTu6jftG2Q9W5xT46+bRd8ZNlYYd10UQnSs2iYrls7UjOonpu9/o+2wfk27rw9fhhXSYbwDSaAOlDwN4O4QjmOYBU379MmKd6jg97lk8eMQD0c1tmB4D4h57ET3v68TKoJ48Yekqe2zJ/9jpJ25PtKrocu3VX99Xltrn7aDf+NEGsY1ZVOVTzfUxYrNvVBvauLW8fo4fp+3pduXIYuNq57erxTcP0bVmdNpsDb0a+q0VRrw56mpY29dOxaT7Y0tKVNiNXuhj7uvzQ3l0UTVMNrr4d+s2nxBQ3vt8wcIWX/dC1q2Icfn65XMBeta2vh4Ervq+/Vc3bpT3kq2IopuptdedQv7pPB+qDJg7stzhYcbD1NHn0st5Y5d3iGz9wi1/tKbrFj37gt1oVtx56GUZuubq5OW2/+cLr7Xi36wNZ3h+s7GAf23Z+gNtf2gHP2uaJC3bTNvNqZXvw57M3c+Wrui/H2mt4uh37U1s39fDb1T/Wpf4EH8wdZLxuXekP9+nbGZfrW+ci2/B27Erl2A1FKJ1tx34vb4FHPVNO57Y16qOQq6qYuxuwP4+9mSsv7U2/vtwqdbE/3fBXW71Od5PA9m4P3O3EN9e1fX/VfvUt7SauWJRl2819xO+jl3szf+Bi6O7afnFbhAjtTYMCRVn1i3odrv9u5g1Zz4eFvyUtqvpmYb+NpP3OWC/ubI9F89GXk1/Ebu084PziJgz30Tf73TGL7BejzGaH972uKv6yBT/6O9zxLSGjhJwSDCVIgRkSMxRmxJShPSE9mpBQQkoJGSXklGAoYaN2itVOsdopVhswsNwS6x2aSqgFE2rBB4T8eQcejc9oQzklGErYGDDBBkywARNswKOvrNSUkOCeUsoIp62pwzV1uKYO19DhGjpcU4dr6nCNHa6xwzV2uMYO19ThmjpcY4cDBtY7XKiYZiKmmYhpJmL64BHTB4+YpiKmqYiPNoegBElbklhqibWWWGyJ1ZZYbon1DhdX0RgpGiNFY6RojBSNkaIxUjRGisZI0RgpGiOFY6RwjBSOkcIxUjhGCscIMLDgQQ5Jgydp8OSxDtEQn9CGUkrIKCGnBEMJm9xJ/EwncfAkDp7EwZM4eEf7Q6aUgPWWWPAgn6A5FTSnguZUwJwKmFNBcypoTgXNqaA5FTinAudU4JwKnFOBcypwTgXNqaA5FTingIEV94IbGGwDc21grA187DXwqdfAVBsYagMzbWCkDU20oYE2NM+GxtnQNBsaZkMfdg191jU0y4ZGmSYznx3+k8HPk3k8PoZ4DfEJxKcQn0F8DvEG4kMyAYEqLKnEkmosqciSqiypzJLqLPP/ZewMGjuDxs6gsTNo7AwaO6PGzqixM2rsjBo7o8bOqLGpK1LoihS6IoWuSKErUuqKlLoipa5IqStS6ooUipxAkRMocgJFTqDICRU5oSInVOSEipxQkRMosoYiayiyhiJrKLKmImsqsqYiayqypiJrKHIMRY6hyDEUOYYix1TkmIocU5FjKnJMRY7hk52CplDQFAqaQkFTKGgKRU2hqCkUNYWiplDUFIo+2Sn4h/KDH9fd+wLP/DJ9ND6B+BTiM4jPId5A/OZH6eMJkhIUJVCNJRVZUpUlldmfszgaH0O8hvgE4lOIzyA+h3gD8cHWgtpaUFsLamtBbS2orQW1NSAcr/OX8D7CeVU0w2LzikPd/1k00/tWQzdWs+jfaVJML0297rrwjsvEK4exq6KT6PN4Veb681hKdR3Zg4/Dou3s+rwrvq5eXLfdi2FR9y+uxrqZR9//A1JIgOQTOAAA", "gzip:H4sIAEUPoGoC/5WaXU/bSBSG/wqa62jlGfyZuwJVqbZoWcFud9X2wjiGeHEykT8KEep/38nMxEkoBT83ZGbOe+brfY4jIj+Js+r2tir6uluLqbgoZ1W/EBNxnrfX1aL8VC2qTkxv87otJ2JvJJiIq1p3p7pfml40Ead6+b1c68bHzciffdmXHxrdr8T0SbRzrbuysYOtmH4ZRlxnkZtmlddimkxEvlhoMVVqIqqZWerH5NV4eBgPh3jo4umPbxvFL5b7SS7fmC56YzvZq8vJaKuXmdOrw/l+FsSvT3g86P0Gjt/YYGLmMzOKq75ZNVVbXg0TP4ld+8tGYkxdlkVXzvY1frDSy63sky7uX0r33ctqVdqwb9jYudnUy4v67seiPKm3E29bblfzvFo+29NmaBs/6ev62oQWNrRt2dBF31bFtV5f5HVddjY+NN3iG6jzO7df37CBd23X6GXed69fl62BM61d3Dds8LJ6LOuPCzPlWd7lm+h9ubaq3+2nFbXeEyt2SzwbsbLVpvPitd4Z3+3gB9ewgw/miHbws2u4pZb5vZNe+ZYdLu/uTvSjC7wf2rtVD2y5fDayk33WevZMtz+0E57q+hcXdqfrWbk0e3Dn2evZ8E3VFn3lPDwZ2u5oq7rq/rj5z1DqDnjQt5L+VtvQX/bTbadfrO4tRWbDQ9uGir7pch86HdpuLYfAi8wUm7MNoL4ouSnzmX1GunPs9Wx4YZ7L1dXg1MV+d5u/HPw62XV8tqPd5w4dt7lGt+2NfnBb2nVsMC8K3cxciT+Jd3s9N3HeNWvdzu9zX0J7Xe9AXpTtvFr5+9/1HJDVrJubJ1Y8EfOyupubLwxlvlFW87XZY15/duHot72xc69zg9tieBKP9rtm7R6Xh4/tpsz/MeOu9a9/sht9DPUJ1KdQn0G9DGDCsdOnY/Uh1EdQH0N9AvUp1GdQvzVgfIKkCQomeH0CkUggEglEIoFIJBCJBCKRQCQSikRCkUgoEuMTqMd+RzFkLobMxZC5GDIXQ+ZiyFwMmYshczFlLqbMxZS5mDI3PoGa7I8QQUgjCGkEIY0gpBGENIKQRhDSCEIaUUgjCmlEIY0opBGFdHSCP3MIoQ4h1CGEOoRQhxDqEEIdQqhDCHUIoQ4p1CGFOqRQhxTqkEI9PoG67C/pePLs16g3qmC0XkH9MdSHUB9BfQz1CdSnUJ9Rv7DB1GFJLZbUY0lNltRlf0kKVoGCVaBgFShYBQpWgYJVoGAVKFgFClaBolWgaBUoWgWKVoGiVaBoFVCqJaRaQqolpFpCqiWkWkKqJaRaQqolpVpSqiWlWlKqJaVaQkgDCGkAIQ0gpAGENICQBhDSAEIaQEgDCmlAIQ0opAGFNKCQQugyxlzGkMsYcRkDLmO8ZQy3jNGWQdgyyFoGUcsgaRCElIGQMhBSBkLKQEgZCCkDIYUgpBCEFIIArz5hV5+wq0/Y1Sfs6hN49fCsB78t2/dlXj/seH0K9RnUO2sjuP8I7n+83t//+AT3FAnhAUJ4gPF6X4vjE9xT8+CfffuG1usHHq+PoD6G+gTqU6jPoN4TBBIkTVAwwVmsoMUKWqygxQparKDFClqsqMWKWqyoxQpaLKHFElosocUSWiyhxRJaLKnFklosqcXUsgBaFkDLAmhZAC0LoGUBtSyglo1J+ObfyDsv87qbb1/yq9q/83rzwnHX9OVEfN908s1rw++bxr/luckrur4pxVR87YvoNvza5+VxYP7O4kKYJfpurhsTnTX5w/LoVjdH3bxqj276qp6JH/8DqRY2OL4uAAA=", "gzip:H4sIAEUPoGoC/51aXW/bNhT9KwGfhcEiRfnjrU6KpliDZUi6bGj7QEu0xVkWDX00MYz891EkJTuuk+jsJb5fR/dS9xwiiLMnV2q5VEmT1zsyI9eiTElgPqp7tZFf1EbVZLYUeSUDchQZBeQu1/Wlbgrj8YBc6uKn3OnS503kz0Y28lOpmy2Z7UmVaV3L0gYrMvvWR5yzEcZUIiezcBIQsdloMqNxQFRqej0HxwW0z49cPnr+0Va88jzKT58Xvnzerw35mw8Mp309d/X07QHCvp66embqDYLcNeW2VJW864F7crC/tSXmtRYyqWV6XOODShdd2RedrM/BvXurttKmvWFz12ao8029+zmR87x7cGe5qTKhipOZ2lCXnzd5fm9SG5vqLJu6aSqV3OvdjchzWdt8b7rmLa3Eys3rDZv4UNWlLkRTv/26LAuvtHZ5b9jkrXqS+eeNeeSVqEWbXcudrfrdftqiyu/EFrsWJxFbtm2ds691ZRZvg5+cYYOP5og2+OAM16oQa1d65y0blqvVXD+5xMfePnR9sZbbk8ih7EHr9KTuOHQovNT5Ky9spfNUFmYGd54jz6YXqkoa5XY47213tG2u6j8W/xqWugO+8G1Js9Q29dV+unGazXZtWWQG7m2bSpqyFj512duul6PAWc4k7dl6op4tWUiR2lvKnePIs+mNuRfVXb+pm2O3wxf9vuYHx6Md2z22d9xwpa6qhX50Ix0cmxRJosvUSXxPPhx57sGiLne6ytbCS+jI9RsQiawytfXv/+A5Qqq0ztyNlEm1ymp3nW6znZlR5A8uzX87il37OhfsxLAnT+ZKNJGduxlPLt5Sir9Nwln/+Lu3RYQoYuIAk+D06n4NMEUB3Skm8CkABIWnYigidoDxYMAYBUxQwBQFdLsYw7sYw7sYw7sAEBGM4CjCA2KUIDFKkBglSIwSJB6+vBGMCGEEhREMPXhHkBgmCICAF+6H4sHJ793vUJCjFOQoBTlKQY5SkMMU5DAFOUxBDlOQwxTkMAU5TEEAMQY56M8dDa2PwHp+pn4IxyOU4xHK8QjleARzPII5HsEcj2CORzDHI5jjEczxCOb4YA6GExDgXy0DRcRAETFQRAwVEUNFxFARMVREDBYRg0XEYBExWEQMFhGDRcRgETFYRAwV0XDAFAW4egqqlIIqpaBKKahSiqqUoiqlqEopqlIKq5TCKqWwSimsUgqrlMIqpbBKKaxSiqqUoiodrroRCPD1YXD61/137oHhAIoCGAqIUABHATEKGKOACQqYwovDVw3vOoSXHcLbDuF1h/C+Q3jhIbzxEF55CO+cwjun4f/l1Sg4/ULxPV4BCNdjiraYoh0maIcJ2mGMdhijHWK0Q4x24GgHjnaI0A7DAU5EDJ2IoRMNB7iLgIInoOgJKDhQCA4UogOhDeD7Ygjgh//i71qKvM667xJV9ZfI2/9rqMtGBuRn64j2vxM+lqX/MrnFJXVTSjIj35skXozMz9FiRMzDmzrTpYmnpXgsLpa6vKgzVV0sGpWn5Pk/kfzuKJ8iAAA=", "gzip:H4sIAEUPoGoC/52bS2/jNhSF/0qgtVFIFCVZ3k2SwWTQCZoi06bFzCxkWbbVyKahxyRGkP9emaTlR51YX1cmec8RH+dcObh0XpzrfDrN06ao187IuUnKiTNoP6qv+SL7ki/y2hlNk6LKBs7eiDtw7gtVX6lm2faCgXOllj+ztSptvB35vcma7FOpmpUzenGquVJ1VurByhl960ZMZ5G0zTwpnJHwB06yWCjTyiftXK+DA8BwC/CEAcgjwO4JFjB8/bGBvDWj6B4oDd5784F2ScG5GeN3Z3Q7uGvg4uh5/1lReG5Cz313Rnk8o3/ugdHZGb12xnZO574pV2VeZffd1C/Orv1tA2ndsczSOpvsY+xgrpZb2BeVPp6i2+5dvsp02DZ07KZd1elJbfdzml0W2wdvW2ZV8yRfHq1pM7SNXzZF8bUNLXRo29Kh26bK069qfZsURVbreNc0k2+yI5mZ9dqGDnyo6lItk6Z+/7h0Ml0rZeK2oYN3+XNWfF60j7xO6mQTfczWGvWr/tSgymqiwWaKoxENW206J4911iqvBz+Zhh58areoBx9Mw0y1TB4N9N629HA2m12qZxP42LV3sx7Icnc0soM9KDU5wu0P7YBXqnjjwGaqmGTLdg1mP3s9HR7nVdrkRsPLrm22tiry+rfxP61LzQYP+hrSTJUO/aE/zXKaxepRu6hdcNfWobQp68SGrrq2mctY4KRn0s3eOqOehIyzZKJftmYfez0dXrSv9/y+U+p2v7vlLzu9LncdyzZut9yuYxZXqqoaqyezpF1HB5M0VeXEpPiL82GvZx6c1OVaVfPHxKbQXtcqkKRZNc9X9vx3PWPIfFLP21dS+3qbZ/lsXpsX1Wq+bteYFA8mHPzi7sZuLM4MbpPhxXnevNEGztq84A7f1WWW/NWGTetv+/3wbL6AGME1BK83waMEQQk+JMQG79I9u3TPLt2zS/fcnyAhYajxXswOtT/eHiogeJQgKMGnBEkJASRYFYaD4z9kzsjQn7DVATA8zBCY4WOGxIyAMiJDiHoThpQQU8JWvgjLF2H5IixfhOWLsHyAEVKGFTykgodU8BALHmLBQyx4iAUPseAhFjzEgodU8IAKHlDBAyz4IWPYQ3DAEJjhY4bEOw8wI6QMK7ikgksquMSCSyy4xIJLLLjEgkssuMSCSyq4TwX3qeA+FtzHgvtYcB8L7mPBfSy4jwX3qeCCCi6o4AILLvB3uMDf4QJ/hwv8HS6w4AILLqjgHhXco4J7WHAPC+5hwT0suIcF97DgHha8P8MSXOoQlzrEpQ5xsUNc7BAXO8TFDnGxQ1zsEBc7BDCw4mZRMfRgDC0YQwfG0IAx9V9M7RdT98XUfDH1XkytF1PnxdR4gECFNns+rGGJs8YeQmPTGtkQGpsWOHF9E5c3cXUTFzdxbROXNofU2ENq7CE1NiDE0NnmVKPeeAnxwQn8+cyhxUZaXKa1ZVxaxpVlXFjGdWVcVsZVZVxUjmjmRDRzIpo5/Z0tXErQ+BCmZghTM4SpGcLUpGVheg1AbwHwJQC+A8BXAPgGAF8A4Po/Lv+HNDVDmpohTc2QpiYgeJBg8AHM/QDmfgBzvz8+PIE/n8v0hode8OD7nYDmckBzOaC5HNBcxlc7+GYnoLkc0NQMaGoGNDUBgeaaWZGEuS9h7kuY+/3x0Qn8+dykd3H4Kk7S3JQ0NyXNTUlzE9/C4Uu4/gRBfSqwUalTBbWqsd7BNZQ867zecGu8/ngP4gXE+xAvIT74P8cp4HEKeJwCHqeAxyngcdL9enC/HtyvB/dL1+PC9fTA/7A/mb7JkqKeb3+FnVd/JsXmX0LqsskGzs9NJ9n8X8fHsrQ/w9/w0ropM2fkfG/GwyD93qRTz3fahzf1XJXt+KRMnpYXU1Ve1PO8uhg3eTFxXv8F8qrDgKA0AAA=", "gzip:H4sIAEUPoGoC/5WbWW/bRhRG/4rBZ6HQbFz0FjtBHDRBUzhpWqR5oCXaYk2JApfEguH/XmpmKMmybPG8WLPcb7Z7zyUtkQ/B2/zmJp+2RbMOJsFlWs2CUfdRf8kX2cd8kTfB5CYt6mwU7LWMR8FVUTYXZbvsamYUXJTLn9m6rHx/1/Jnm7XZ+6psV8HkIajnZdlklW2sg8n3bYurLNKumKdFMFHd0OliUQYTKUdBPuvmehy9YCCcgTllIMaPPzY2L0wpzTPB0xGfG4SnDIR4fUrRC0TiBPJgxGcG0cldylenjLcDhs5enRowfnGTYz+jenVGoXqBn1GfOrWkG68bMbhqq1WV19nVduCHYFf+vjHpAm6ZTZtstm/jG/Ny2Zt9LKd3x+S++jlfZbbbF2zfZbeo45P66odpdl70A/clt6p5mi8P1rRp6vvP26L40nUtbFdfsl2f2jqffinXn9KiyBrbvy26yTfApbduvb5gO97UTVUu07Z5/bgsn2/L0vX7gu38nN9nxYdFN+TbtEk3vXfZ2lr9bj+tUe19Yo3dFAct1my1qRw91tvO8bbxvSvYxl/dFm3jN1dwUy3TO2d65Uu2Obu9PS/vXce7bXk36xO3fD5o2Zl9K8vZgd1+087woixeOLDbsphly24Nbj97Ndt9ndfTNnc+PN+W3dZWRd78cf1fF6Vug0/q1qS9KW3XV/vpltMuVnc2iroFb8u2a9pWTeq7LrZlN5cLgaMxM93sbRuoR02us3Rm87fbx17Ndi+6K0Z+tfXUp/1qr19u/XW+q3i1i3av3Vbc4qqyrq/LX25Ju4rtTKfTspo5xB+CN3s1N3DaVOuynt+lHqG9qvdAOs3qeb7y57+ruYDMZ828y0h6FMyz/HbeuAvRar7u1pgW31y3+W28a7v0dq6xh+EhuLdJd+3S20FarLL0767oSv/4K869S85MkTjBePgUBivGVrG5Eg1VaKwQThGPDq+CLyokVXhBNDq87L0kUFSgqcBQQX9OET4noIjxqhKqkGOsEHhVThAOn4IKFBVoKjBUEFJBRAXi2LkOCkGgwNsQfB8xViQ4osZYwaMWh61flKEkGUqSoSQZStITQXwapMH2IV1QRAUx9sIxNwwCDygMXhU+KYGPSsTQez2pgwUSMyE5FJgKibHw29AUbU3R1hRtTdHWEG0N0dYUbU3RHi5IsNuO+W1QLgAKjVdlsAI7Q2BviBgGiEigQGLsJOcOgycxeX4bimYPRbOHotlD0eyh6C22orfYiuYPRfOHovlD4fyhcP5QOH8onD8Uzh8K5w+F84fC/ygo/I+CwhlE4QyicAbBCUHShCBpQpA0IUiaECRNCJImBEkTgqQJQeKEIHFCkDghSJwQJE4IEicEiROCxAlB4oQgcUKQOCFgWgWlVVBaBaVVUFoFpVVQWgWlVWBaBaZVYFoFplVgWgWmVWBaBaZVYFoFphWj9OR3G/sb+gmUhgsMFYRUEFFBTAUJFfQojTFKY4wSWBX2hcDOENgbArtDYH/0KAGFFSSD7RW019DeQPsQ2kfQPob2CbT3BCUUoITyk1B8EkpPQuFJKDsJRSeh5ACBoEuy9jEkM4ZkxpDMGJIZsy+KB5tHcDUxtE+gvTjmrgFcxpTLmHIZUy5jyuVgp4kY2lMveCpjSiUQUMzcBBHEOIIYRxDjCGIcMYwjhnEEMY4gxhHFGD/xE1GMI4pxRDGOKMYRxDiCGEcU44hiHFGMKZYhxDKEWIYQyxDe94bwvjeEYIYQzJCCiZ+DCimYIQUzpGCGFMyQ3veG9L43pGiGFE1KjoHkGEiOgeQYSI6B5BhIjqHk4AeZDCXHUHIMJcdQcgwlx1ByDCWHBraGga1hYGsY2BoGtqaBip+y0fSBO03jTtO40zTuNI07GhYKhoWCYaGom/HDEIo+0Kyo1xT1Gt40/sEXCPxX6/ibdToD/u5+iOCHf5vnMkuLZt6/IJTXf6XF5mXFpmqzUfBzU0k3rxy+qyr/hthGN23aKgsmwb/t9TiJu7+Z1kE3eNvMy6prn1Xpr+XZTVmdNfO8Prtu82IWPP4PvVoFpo47AAA=", "gzip:H4sIAEUPoGoC/52bXW/bNhSG/0qga2PQkSyR9F2TFk2xFuuQrt3Q9kKRlViLbBn6aBME+e+TSforS2M/uUlInvcVSZ/z2Lyg7oPX5dVVmfdVdxdMgs9Fc3dynjXTYBScZ+2ncl68L+dlF0yusqotRsHOSDgKLqq6O6v7xdBLRsFZvfhR3NWNjw8jf/ZFX7xt6n4ZTO6DdlbXXdHYwTaYfN2MuM48G5plVgWTWEZBNp/XwSQaWuV0mOthtCuQZC3QLp7sx3ceEDqBhA/fV5pfzBiu9aK8/pcP9CtKD84oz84YRRtD6gzR/hP/tyR1cMbo2Rn1Rh85fXzogfrgjPGzM6abLfgZx4ceaA7OOB5mHOYMLvpm2ZRtcbGZ+j7Ytr+uJEM9Loq8K6a7Gj9Y1ou17H2d3zxl992P5bKwYd+wsfNhVU9P6rvv8uK0Wj943XKrmmXl4tGaVkPr+GlfVZ+G0NyG1i0b+tC3Zf6pvvuQVVXR2fim6SZf8Zhdu/X6hg28arumXmR99/zHZfF9Xdcu7hs2+LG8Lap38+GRr7MuW0Vvijur+t3+t6LW58SK3RSPRqxsueo8+bFeD5m3g29dww7+HLZoB7+4hptqkd046YVv2eHi+vq0vnWBN5v2dta9tHx8NLKVfanr6SPd7tBWeFZXv/jArutqWiyGNbj97PRs+LJs8750OTzdtN3WllXZ/XH571ClboN7fSvpr2ob+sv+d8vp58sbW0XDgjdtG8r7pst86GzTdnO5EniyZvLV3jaF+qTkssim9uvd7WOnZ8Pz4VelvNhk6sNud+1fbPJ1uu14t6t279103OKaum0v659uSduODWZ5XjdTh/h98Gqn5x6cdc1d3c5uMo/QTtdnIMuLdlYu/ee/7bmCLKfdzH0lzYryejb81okZMjC7G9aYVV9cOPkt3I6de50bXMNwH9za7/nhl1f06NFXdVNkfw/jrvWP/0W6tSNMr6nBQIPfgYI7OFof0ecratDUYF625RRu+Wh9DPUrJTMoatAv23ICt3y0fgz1KyUzpNSgXrbl8ejxEenAno83JNSQUoOiBk0NhhokxA7Bjgg7cLYFp1twvgUn3G88PtoQU8OYGhJqSKlBUYOmBkMN6yqPcZXHuMpjXOUxrvIYV3mMqxw4cMb9hxtRkCIKUkRBiihIEQUpoiBFFKSIghRhkCIMUoRBijBIEQYpwiBFGKQIgwQcOOU+gUJZFcqqUFaFsiqUVaGsCmVVKKtCWRXMqmBWBbMqmFXBrApmVTCrglkVzCpw4Jz7lIeU7pDSHVK69wzpYbiP1idQn9INKGrQ1GBw1niecaIFZ1pi7KDJFpptSakBp1twvgUn3OXbQKwNpNpAqA1j2jCkDSPaQKAN5NlAnA2l2VCYDWXZUJQNJdlAkA3k2ECMDaXYUIgNZFhDhjVkWEOGNTx1a3jo1vDMrSHGGmKsIcaaYqwpxppirCnGmmKs6VFb05O2pgdtTUnWlGQNSVaQZAVJVpBkBUlWkGQFSVaQZAVJVpBkRUlWlGRFSVaUZEVJVpRkRUlWlGRFSVaUZEpmCslMIZkpJDOFZKaQzD29vU/4PJnH6zVcj4F6T2ZKyUwpmcdvWWJqoEkWmmVJqUFRA020S0MCQUsgaAkELYGgJRC0BIKWQNASCFpCQUsoaAkFLaGgJRS0hIKWUNASClpCQUsgaPSKwhiCRq/h0Fs49BIOvYNDr+DQGzj4Ag6+f4Ov3+DbN/jyDb57g6/ejCloYwoaBWfvzkN4kJuj5WMmT5g8ZXLF5JrJDZN7YI7XC9TDxArMrMDUCsytwOQKzK77eCJW93ty+/rP84V/vD6B+hTqFdRrqDdQ78sfGIQaImqgORaaZKFZFppmUS8pa2Ff5wKrWmBVC6xqgVUtsKqFVrXQqhZa1UKrWmhVC61qoVUtrEhDVqQhO3OE7MwRsjNHyM4cITtzhPDMEcIzRwjPHCE8c4TwzBHCM0cIzxxH6L/7V8DOi6zqZuu3ysr2c1atXnHtmr4YBT9WnWz1nuqbpvGvFa58edc3RTAJvvWX42k+/FVGf+uzvBgHwxR9N6ubITptsp+Lk6u6OelmZXty2ZfVNHj4D0S+rCHtPQAA"];
+const PACK_MAN = [{"n": 1, "d": "Easy", "slots": 5, "lim": 5, "px": 92, "name": "새싹", "f": {}}, {"n": 2, "d": "Easy", "slots": 5, "lim": 5, "px": 170, "name": "물방울", "f": {}}, {"n": 3, "d": "Easy", "slots": 5, "lim": 5, "px": 156, "name": "별", "f": {}}, {"n": 4, "d": "Medium", "slots": 5, "lim": 5, "px": 249, "name": "사과", "f": {}}, {"n": 5, "d": "Medium", "slots": 5, "lim": 5, "px": 254, "name": "버섯", "f": {}}, {"n": 6, "d": "Medium", "slots": 5, "lim": 5, "px": 210, "name": "열기구", "f": {}}, {"n": 7, "d": "Hard", "slots": 5, "lim": 5, "px": 145, "name": "우산", "f": {}}, {"n": 8, "d": "Hard", "slots": 5, "lim": 5, "px": 236, "name": "로켓", "f": {}}, {"n": 9, "d": "Hard", "slots": 5, "lim": 5, "px": 270, "name": "나비", "f": {}}, {"n": 10, "d": "Very Hard", "slots": 5, "lim": 5, "px": 284, "name": "드래곤", "f": {}}];
+
+/* ======================================================================
+   Flame Dragons - a conveyor shooter in one file.
+
+   The RULES are reverse engineered from another build of this genre (see
+   UNITY_SPEC.md; every constant below still carries its evidence grade and the
+   address it came from). The simulation core here is that clone's, unchanged on
+   purpose: it is the verified part.
+
+   Everything a player sees is mine. The ten pictures are hand drawn as ASCII
+   grids by tools/make_pack.py and inlined above as PACK, so no level file of
+   anyone else's ships here. Every sprite is drawn with canvas paths in the
+   `art` module below - the shooter is a sticker style dragon that breathes fire
+   in its own colour - the 34 material colours are my own palette, and the lobby
+   and shop are CSS gradients and clip-paths. Open the network tab: zero
+   requests, images or otherwise.
+   ====================================================================== */
+/* 34 material colours, mine. Level JSONs carry material IDS only, so the hues
+   are free; these walk the hue circle in 97-degree steps with alternating tone
+   so no two neighbouring ids look alike (the original palette had several
+   near-duplicates, which made colour matching guesswork). The name is derived
+   from the hue it actually lands on, so the legend never lies. */
+const HUE_NAMES = [
+  [15,'Red'],[45,'Orange'],[70,'Amber'],[100,'Lime'],[150,'Green'],[175,'Mint'],
+  [195,'Cyan'],[225,'Sky'],[255,'Blue'],[280,'Indigo'],[300,'Violet'],
+  [330,'Magenta'],[350,'Pink'],[361,'Red']
+];
+function hsl2hex(h, s, l){
+  s /= 100; l /= 100;
+  const k = n => (n + h / 30) % 12;
+  const a = s * Math.min(l, 1 - l);
+  const f = n => l - a * Math.max(-1, Math.min(k(n) - 3, Math.min(9 - k(n), 1)));
+  const b = x => Math.round(255 * f(x)).toString(16).padStart(2, '0');
+  return '#' + b(0) + b(8) + b(4);
+}
+const PALETTE = (() => {
+  const seen = {}, out = [];
+  for (let i = 0; i < 34; i++){
+    const h = (i * 97) % 360, s = i % 2 ? 62 : 82, l = i % 3 === 2 ? 70 : 56;
+    let nm = (l > 62 ? 'Light ' : s < 70 ? 'Soft ' : '') + HUE_NAMES.find(x => h < x[0])[1];
+    seen[nm] = (seen[nm] || 0) + 1;
+    if (seen[nm] > 1) nm += ' ' + seen[nm];
+    out.push([nm, hsl2hex(h, s, l)]);
+  }
+  return out;
+})();
+const colorOf = m => (PALETTE[m] || ['?', '#8b849c'])[1];
+
+/* TickShooter (0x4ecd01c) is rate driven. Real field names, read from
+   ShootersOffenseController's layout: `shotsPerSecond` (+0x40),
+   `shootSpeedMultiplier` (+0x48), `damagePerShot` (+0x50), `alignTolerance`
+   (+0x54), `shootersPerFrame` (+0x58). Only the 16 cap is a literal in the
+   code. The rest were recovered from the SERIALIZED COMPONENT in data.unity3d:
+   the bundle carries one ShootersOffenseController instance and the field
+   offsets above let its raw bytes be read directly (reverse/tools/
+   decode_serialized.py, parse verified EXACT):
+       shotsPerSecond 20.7, damagePerShot 1, alignTolerance 0.15,
+       shootersPerFrame 0, shootSpeedMultiplier -> external SO [X]. */
+const SHOTS_PER_SEC = 20.7;         // [A] serialized shotsPerSecond
+const MAX_SHOTS_PER_TICK = 16;      // [V] literal cmp w9, #0x10
+const DAMAGE_PER_SHOT = 1;          // damagePerShot [X]; pixel HitTarget.Health is 1 here
+const FLIGHT_MS  = 150;   // projectile flight time
+/* SlotEntranceQueueController: TryEnqueue -> AcquireQueueSlot -> StartJump ->
+   HasShooterArrived -> TryDrainToSlots. The entrance queue has NO capacity:
+   CreateQueueSlot (0x52bcc24) instantiates a pad and Adds it with no bound, and
+   AcquireQueueSlot (0x52bc65c) never rejects. Admission is gated on the BELT
+   instead - ConveyorController.CanReceiveItemCount(n) (0x52718b0) is
+   `get_EmptySlotCount() >= n`. Only the jump duration is a guess. */
+const JUMP_MS = 260;
+const PLACE_INTERVAL_MS = 50;   // [?] shootersPlaceToConveyorInterval ~0.05s
+/* The waiting area's pads. In the original the pool grows on demand
+   (CreateQueueSlot 0x52bcc24 instantiates one and Adds it, no bound), but
+   TryEnqueue only accepts unconditionally while a pad is FREE (cbnz at
+   0x52bd788) and otherwise asks the conveyor for room - and when both refuse, a
+   shooter coming off the belt has nowhere to go, so
+   MapEvents.TriggerSlotsFullAtConveyorExit ends the level (6.2 / 6.7). The pool
+   size is a scene value [?]; the row drawn here is 5 pads, same as SlotCount. */
+const ENTRANCE_CAP = 5;
+const WIN_DELAY_MS  = 200;      // [A] GameFinishController.checkCompleteDelay 0.2
+const FAIL_DELAY_MS = 800;      // [A] instantFailDelay 0.8
+/* Belt speed multiplier: 1.0 normally, and ConveyorSpeedMultiplier's serialized
+   autoFinisherActiveSpeed 2.0 while the AutoFinisher is latched (6.8 / 9.2).
+   BELT_TUNE is a build-level knob and stays 1.0 for a faithful clone. */
+let BELT_TUNE = 1.0;
+const AUTOFIN_SPEED = 2.0;      // [A] autoFinisherActiveSpeed
+const beltMult = () => BELT_TUNE * (G && G.autoFin ? AUTOFIN_SPEED : 1);
+/* The relief valve is OFF: it has no counterpart in the original (7.5 / 7.10).
+   A board whose only gates are locks or mallets with no key/note data stays
+   stuck, and that is the honest outcome. */
+let RELIEF = false;
+/* ConveyorController serialized in data.unity3d [A] (parse EXACT):
+   speed 5.0 (world units/sec), baseItemLength 0.5, minSpacing 0.5,
+   alignRotation true, clipStart 0.0, clipEnd 0.995, enforceLerpSpeed 1.0,
+   startPointOffsetPrepareFixPercent 0.6, checkpoints [{"fail_warning", 0.5}].
+   speedMultiplier is an external SO [X]. World units are converted with
+   pxPerWorld = gridWidthPx / physicalWidth. */
+const BELT_SPEED_WORLD = 5.0;      // [A] serialized speed
+const BASE_ITEM_LENGTH = 0.5;      // [A]
+const MIN_SPACING      = 0.5;      // [A]
+const CLIP_START       = 0.0;      // [A] serialized clipStart
+const CLIP_END         = 0.995;    // [A] the seam sits here, not at 1.0
+const QUEUE_ROWS = 5;     // shooters drawn per queue column
+/* GatherAlignedRows (0x4ecdc14) / GatherAlignedCols (0x4ed0204):
+
+     for (row = 0; row < grid.Height; row++){
+         if (!rowIsActive(row)) continue;              // active-axis cache
+         fabd s0, RowCenterZ(row), shooterZ            // |centre - shooter|
+         ldr  s1, [this, #0x54]                        // alignTolerance
+         if (s0 > s1) continue;                        // b.hi
+         push row;
+     }
+     InsertionSortByRowAlignment(...)                  // nearest-aligned first
+
+   So the tolerance is ONE serialized float, `ShootersOffenseController
+   .alignTolerance` (+0x54), compared against an absolute WORLD distance - not a
+   fraction of the grid. The value itself is in a runtime bundle [X], but the
+   unit is now right: it is a distance in the same units as the level's
+   physicalWidth/physicalHeight (which vary 5.0..7.0 across the 2300 levels, so
+   a grid-relative guess was wrong in kind). */
+let ALIGN_TOLERANCE_WORLD = 0.15;   // [A] serialized alignTolerance. One cell
+                                    // wide: cellWorld = physicalWidth/40 ~= 0.15
+
+/* Targeting mode.
+   true  = as in the game: a shooter sees only the lines of the picture it is
+     riding alongside - columns on the bottom and top stretches, rows on the
+     left and right ones - and on each of them only the OUTERMOST solid pixel.
+     It fires only if that pixel is its own colour, so anything of another
+     colour in front of it blocks the shot until someone else peels that away.
+     Riding the belt is the whole game and a shooter never leaves it to fire.
+   false = a shooter hits any live pixel of its colour, wherever it is. Kept for
+     comparison; it makes every level trivially winnable, because total ammo per
+     material equals that material's pixel count in all 2300 levels (the game
+     asserts it: MapLogic.CheckShootersAndPixelsInSync). */
+let COLUMN_SCAN = true;
+
+/* ============================== art ==============================
+   Hand-written sprites. mk() rasterises a draw function once into an offscreen
+   canvas; everything that used to be a PNG is one of these. The core's badge()
+   and drawDragon() take them unchanged (a canvas answers .width/.height instead of
+   .naturalWidth, which is the only line of the core that had to bend). */
+function mk(w, h, draw){
+  const c = document.createElement('canvas');
+  c.width = w; c.height = h;
+  const g = c.getContext('2d');
+  draw(g, w, h);
+  return c;
+}
+const ready = im => !!im && ((im.naturalWidth | 0) || (im.width | 0)) > 0;
+
+function rrp(g, x, y, w, h, r){
+  g.beginPath();
+  g.moveTo(x + r, y);
+  g.arcTo(x + w, y, x + w, y + h, r);
+  g.arcTo(x + w, y + h, x, y + h, r);
+  g.arcTo(x, y + h, x, y, r);
+  g.arcTo(x, y, x + w, y, r);
+  g.closePath();
+}
+function starp(g, cx, cy, r1, r2, n){
+  g.beginPath();
+  for (let i = 0; i < n * 2; i++){
+    const a = -Math.PI / 2 + i * Math.PI / n, r = i % 2 ? r2 : r1;
+    g[i ? 'lineTo' : 'moveTo'](cx + Math.cos(a) * r, cy + Math.sin(a) * r);
+  }
+  g.closePath();
+}
+// mix a hex toward white (t>0) or black (t<0)
+function shade(hex, t){
+  const n = parseInt(hex.slice(1), 16);
+  const to = t > 0 ? 255 : 0, k = Math.abs(t) / 100;
+  const ch = s => Math.round(((n >> s) & 255) * (1 - k) + to * k);
+  return 'rgb(' + ch(16) + ',' + ch(8) + ',' + ch(0) + ')';
+}
+function glyph(g, w, h, col, path){          // stroked outline helper
+  g.strokeStyle = col; g.lineWidth = Math.max(1.6, w * 0.09);
+  g.lineJoin = 'round'; g.lineCap = 'round';
+  path(); g.stroke();
+}
+
+/* ---------------------------- the shooter ----------------------------
+   One species: a dragon, drawn in a sticker style - a soft pastel blob with a
+   thick dark outline, a white belly, two leaf fins, one small wing, dot eyes
+   and blush. Every stroke is a canvas path; the material colour is the tint and
+   the only gameplay signal, and the outline is a much darker version of that
+   tint so the silhouette holds at any hue. No cannon: the shot leaves the MOUTH
+   as a flame (drawFlame below). Cached per (material, blink). */
+function blobPath(g, cx, cy, rx, ry){
+  // an egg with a flat, rounded bottom, leaning slightly left like the sticker
+  g.beginPath();
+  g.moveTo(cx - rx, cy + ry * 0.62);
+  g.bezierCurveTo(cx - rx * 1.05, cy - ry * 0.55, cx - rx * 0.72, cy - ry, cx - rx * 0.10, cy - ry);
+  g.bezierCurveTo(cx + rx * 0.62, cy - ry, cx + rx * 1.02, cy - ry * 0.30, cx + rx * 0.96, cy + ry * 0.40);
+  g.bezierCurveTo(cx + rx * 0.94, cy + ry * 0.90, cx + rx * 0.55, cy + ry, cx + rx * 0.10, cy + ry);
+  g.bezierCurveTo(cx - rx * 0.45, cy + ry, cx - rx * 0.99, cy + ry * 0.98, cx - rx, cy + ry * 0.62);
+  g.closePath();
+}
+
+function drawDragonSprite(g, w, h, col, blink){
+  const u = Math.min(w, h);
+  const cx = w * 0.48, cy = h * 0.58;
+  const rx = u * 0.40, ry = u * 0.33;
+  const ink = shade(col, -66);                  // sticker outline
+  const light = shade(col, 30);
+  const lw = Math.max(1.4, u * 0.052);
+  g.lineJoin = 'round'; g.lineCap = 'round';
+
+  // ---- wing, behind, to the right ----
+  g.beginPath();
+  g.moveTo(cx + rx * 0.55, cy - ry * 0.10);
+  g.quadraticCurveTo(cx + rx * 1.55, cy - ry * 0.62, cx + rx * 1.62, cy + ry * 0.10);
+  g.quadraticCurveTo(cx + rx * 1.20, cy + ry * 0.02, cx + rx * 1.28, cy + ry * 0.52);
+  g.quadraticCurveTo(cx + rx * 0.80, cy + ry * 0.36, cx + rx * 0.55, cy - ry * 0.10);
+  g.closePath();
+  g.fillStyle = '#fdfdf7'; g.fill();
+  g.strokeStyle = ink; g.lineWidth = lw * 0.8; g.stroke();
+
+  // ---- head fins, behind, leaf shaped ----
+  for (const f of [[0.02, -1.12, 0.9], [0.62, -0.86, 0.75]]){
+    const fx = f[0], fy = f[1], fr = f[2];
+    g.beginPath();
+    g.moveTo(cx + rx * fx, cy + ry * (fy + 0.55));
+    g.quadraticCurveTo(cx + rx * (fx - 0.30), cy + ry * fy,
+                       cx + rx * (fx + 0.42 * fr), cy + ry * (fy - 0.30));
+    g.quadraticCurveTo(cx + rx * (fx + 0.52 * fr), cy + ry * (fy + 0.34),
+                       cx + rx * fx, cy + ry * (fy + 0.55));
+    g.closePath();
+    g.fillStyle = light; g.fill();
+    g.strokeStyle = ink; g.lineWidth = lw * 0.75; g.stroke();
+    g.lineWidth = lw * 0.42;
+    g.beginPath();
+    g.moveTo(cx + rx * (fx + 0.06), cy + ry * (fy + 0.30));
+    g.lineTo(cx + rx * (fx + 0.30 * fr), cy + ry * (fy - 0.08));
+    g.stroke();
+  }
+
+  // ---- body ----
+  blobPath(g, cx, cy, rx, ry);
+  g.fillStyle = col; g.fill();
+  g.save();
+  g.clip();
+  g.fillStyle = '#fdfdf7';                      // white belly, lower left
+  g.beginPath();
+  g.moveTo(cx - rx * 1.1, cy + ry * 1.1);
+  g.bezierCurveTo(cx - rx * 1.15, cy - ry * 0.15, cx - rx * 0.35, cy - ry * 0.42,
+                  cx + rx * 0.16, cy - ry * 0.05);
+  g.bezierCurveTo(cx + rx * 0.60, cy + ry * 0.35, cx + rx * 0.55, cy + ry * 1.1,
+                  cx + rx * 0.20, cy + ry * 1.2);
+  g.closePath(); g.fill();
+  g.fillStyle = 'rgba(255,255,255,.28)';        // soft light along the top
+  g.beginPath();
+  g.ellipse(cx - rx * 0.10, cy - ry * 0.72, rx * 0.62, ry * 0.26, -0.16, 0, 6.2832);
+  g.fill();
+  g.restore();
+  blobPath(g, cx, cy, rx, ry);
+  g.strokeStyle = ink; g.lineWidth = lw; g.stroke();
+
+  // ---- face ----
+  const ey = cy - ry * 0.30, ex = rx * 0.26, er = Math.max(1.1, u * 0.035);
+  if (blink){
+    g.strokeStyle = ink; g.lineWidth = Math.max(1, u * 0.032);
+    for (const sgn of [-1, 1]){
+      g.beginPath();
+      g.arc(cx + sgn * ex - rx * 0.10, ey, er * 1.5, 0.15 * Math.PI, 0.85 * Math.PI);
+      g.stroke();
+    }
+  } else {
+    g.fillStyle = ink;
+    for (const sgn of [-1, 1]){
+      g.beginPath();
+      g.ellipse(cx + sgn * ex - rx * 0.10, ey, er, er * 1.25, 0, 0, 6.2832);
+      g.fill();
+    }
+  }
+  g.fillStyle = 'rgba(214,150,130,.55)';        // blush
+  for (const sgn of [-1, 1]){
+    g.beginPath();
+    g.ellipse(cx + sgn * rx * 0.62 - rx * 0.10, ey + ry * 0.24,
+              rx * 0.17, ry * 0.13, 0, 0, 6.2832);
+    g.fill();
+  }
+  g.fillStyle = ink;                            // nostril
+  g.beginPath(); g.arc(cx - rx * 0.62, ey + ry * 0.02, er * 0.5, 0, 6.2832); g.fill();
+  g.strokeStyle = ink; g.lineWidth = Math.max(1, u * 0.026);
+  g.beginPath();                                // mouth: where the flame goes
+  g.arc(cx - rx * 0.52, ey + ry * 0.52, rx * 0.16, 0.12 * Math.PI, 0.88 * Math.PI);
+  g.stroke();
+}
+
+const dragonCache = new Map();
+function tintedDragon(mat, blink){
+  const key = mat + (blink ? 'b' : '');
+  let c = dragonCache.get(key);
+  if (c) return c;
+  c = mk(64, 72, (g, w, h) => drawDragonSprite(g, w, h, colorOf(mat), blink));
+  dragonCache.set(key, c);
+  return c;
+}
+
+/* The shot: a flame out of the mouth, in the shooter's OWN colour - that is the
+   whole point of the game, so the flame must never say anything else. White hot
+   at the muzzle tip, the material colour through the body, fading out at the
+   tail. */
+const rgba = (hex, a) => {
+  const n = parseInt(hex.slice(1), 16);
+  return 'rgba(' + ((n >> 16) & 255) + ',' + ((n >> 8) & 255) + ',' + (n & 255) + ',' + a + ')';
+};
+function drawFlame(x, y, ang, r, col, t){
+  ctx.save();
+  ctx.translate(x, y); ctx.rotate(ang);
+  const grd = ctx.createLinearGradient(-r * 2.0, 0, r * 1.2, 0);
+  grd.addColorStop(0.00, rgba(col, 0));
+  grd.addColorStop(0.30, rgba(col, 0.55));
+  grd.addColorStop(0.70, col);
+  grd.addColorStop(0.92, shade(col, 45));
+  grd.addColorStop(1.00, '#fffdf2');
+  ctx.fillStyle = grd;
+  const wob = Math.sin(t / 26) * r * 0.16;
+  ctx.beginPath();
+  ctx.moveTo(r * 1.20, 0);
+  ctx.quadraticCurveTo(r * 0.10, -r * 0.78 + wob, -r * 1.95, -r * 0.18);
+  ctx.quadraticCurveTo(-r * 0.85, 0, -r * 1.95, r * 0.18);
+  ctx.quadraticCurveTo(r * 0.10, r * 0.78 - wob, r * 1.20, 0);
+  ctx.closePath();
+  ctx.fill();
+  ctx.restore();
+}
+
+
+/* ----------------------------- icon set ----------------------------- */
+const S = 48;                                  // every icon is drawn at 48px
+const ART = {};
+
+ART.lock = mk(S, S, (g, w, h) => {
+  glyph(g, w, h, '#ffd166', () => {
+    g.beginPath(); g.arc(w / 2, h * 0.38, w * 0.19, Math.PI, 0);
+  });
+  g.fillStyle = '#ffd166'; rrp(g, w * 0.24, h * 0.40, w * 0.52, h * 0.40, w * 0.10); g.fill();
+  g.fillStyle = '#7a5410';
+  g.beginPath(); g.arc(w / 2, h * 0.60, w * 0.065, 0, 6.2832); g.fill();
+  g.fillRect(w / 2 - w * 0.03, h * 0.60, w * 0.06, h * 0.11);
+});
+ART.ice = mk(S, S, (g, w, h) => {
+  const grd = g.createLinearGradient(0, 0, w, h);
+  grd.addColorStop(0, '#dff6ff'); grd.addColorStop(1, '#7cc6ef');
+  g.fillStyle = grd;
+  starp(g, w / 2, h / 2, w * 0.44, w * 0.17, 6); g.fill();
+  g.strokeStyle = 'rgba(255,255,255,.9)'; g.lineWidth = w * 0.045;
+  g.beginPath();
+  for (let i = 0; i < 3; i++){
+    const a = i * Math.PI / 3;
+    g.moveTo(w / 2 - Math.cos(a) * w * 0.34, h / 2 - Math.sin(a) * w * 0.34);
+    g.lineTo(w / 2 + Math.cos(a) * w * 0.34, h / 2 + Math.sin(a) * w * 0.34);
+  }
+  g.stroke();
+});
+ART.iceClock = mk(S, S, (g, w, h) => {
+  g.fillStyle = '#bfe9ff';
+  g.beginPath(); g.arc(w / 2, h / 2, w * 0.42, 0, 6.2832); g.fill();
+  g.strokeStyle = '#2f6f96'; g.lineWidth = w * 0.06;
+  g.beginPath(); g.arc(w / 2, h / 2, w * 0.42, 0, 6.2832); g.stroke();
+  glyph(g, w, h, '#1d4a66', () => {
+    g.beginPath();
+    g.moveTo(w / 2, h * 0.28); g.lineTo(w / 2, h / 2); g.lineTo(w * 0.68, h * 0.60);
+  });
+});
+ART.fChain = mk(S, S, (g, w, h) => {
+  g.strokeStyle = '#b9c4d6'; g.lineWidth = w * 0.10;
+  for (const p of [[0.36, 0.36], [0.64, 0.64]]){
+    g.beginPath(); g.ellipse(w * p[0], h * p[1], w * 0.17, h * 0.12, -0.78, 0, 6.2832); g.stroke();
+  }
+  g.strokeStyle = '#7d879a'; g.lineWidth = w * 0.05;
+  g.beginPath(); g.moveTo(w * 0.44, h * 0.44); g.lineTo(w * 0.56, h * 0.56); g.stroke();
+});
+ART.fTotem = mk(S, S, (g, w, h) => {
+  ['#f2a65a', '#e0684b', '#8e5bd0'].forEach((c, i) => {
+    g.fillStyle = c;
+    rrp(g, w * (0.24 + i * 0.03), h * (0.22 + i * 0.22), w * (0.52 - i * 0.06), h * 0.19, w * 0.06);
+    g.fill();
+  });
+  g.fillStyle = '#3a2450';
+  g.beginPath(); g.arc(w * 0.42, h * 0.31, w * 0.035, 0, 6.2832);
+  g.arc(w * 0.58, h * 0.31, w * 0.035, 0, 6.2832); g.fill();
+});
+ART.fPipe = mk(S, S, (g, w, h) => {
+  g.strokeStyle = '#8ad3b0'; g.lineWidth = w * 0.20;
+  g.beginPath(); g.moveTo(w * 0.14, h * 0.62); g.lineTo(w * 0.86, h * 0.62); g.stroke();
+  g.fillStyle = '#4f9c78';
+  g.fillRect(w * 0.30, h * 0.44, w * 0.09, h * 0.36);
+  g.fillRect(w * 0.61, h * 0.44, w * 0.09, h * 0.36);
+  g.fillStyle = '#d9fff0';
+  g.beginPath(); g.arc(w * 0.5, h * 0.30, w * 0.11, 0, 6.2832); g.fill();
+});
+ART.music = mk(S, S, (g, w, h) => {
+  g.fillStyle = '#f7a8d8';
+  g.beginPath(); g.ellipse(w * 0.38, h * 0.68, w * 0.17, h * 0.13, -0.4, 0, 6.2832); g.fill();
+  g.fillRect(w * 0.51, h * 0.20, w * 0.07, h * 0.50);
+  g.beginPath();
+  g.moveTo(w * 0.58, h * 0.20); g.quadraticCurveTo(w * 0.86, h * 0.26, w * 0.80, h * 0.40);
+  g.quadraticCurveTo(w * 0.74, h * 0.30, w * 0.58, h * 0.32);
+  g.closePath(); g.fill();
+});
+ART.hammer = mk(S, S, (g, w, h) => {
+  g.save(); g.translate(w / 2, h / 2); g.rotate(-0.5); g.translate(-w / 2, -h / 2);
+  g.fillStyle = '#c98b4b';
+  rrp(g, w * 0.45, h * 0.34, w * 0.10, h * 0.52, w * 0.04); g.fill();
+  const grd = g.createLinearGradient(0, h * 0.16, 0, h * 0.36);
+  grd.addColorStop(0, '#e2e8f2'); grd.addColorStop(1, '#98a3b8');
+  g.fillStyle = grd;
+  rrp(g, w * 0.22, h * 0.16, w * 0.56, h * 0.20, w * 0.06); g.fill();
+  g.restore();
+});
+ART.fAstro = mk(S, S, (g, w, h) => {
+  g.fillStyle = '#e9eef7';
+  g.beginPath(); g.arc(w / 2, h / 2, w * 0.42, 0, 6.2832); g.fill();
+  g.fillStyle = '#2b3c58';
+  rrp(g, w * 0.20, h * 0.34, w * 0.60, h * 0.32, h * 0.16); g.fill();
+  g.fillStyle = 'rgba(255,255,255,.55)';
+  g.beginPath(); g.ellipse(w * 0.36, h * 0.44, w * 0.09, h * 0.05, -0.5, 0, 6.2832); g.fill();
+});
+ART.question = mk(S, S, (g, w, h) => {
+  g.fillStyle = '#7c5cc4';
+  rrp(g, w * 0.14, h * 0.14, w * 0.72, h * 0.72, w * 0.20); g.fill();
+  g.fillStyle = '#fff';
+  g.font = '800 ' + Math.round(h * 0.60) + 'px Segoe UI,system-ui,sans-serif';
+  g.textAlign = 'center'; g.textBaseline = 'middle';
+  g.fillText('?', w / 2, h * 0.55);
+});
+ART.fSlotCage = mk(S, S, (g, w, h) => {
+  g.strokeStyle = '#cbd3e2'; g.lineWidth = w * 0.07;
+  rrp(g, w * 0.16, h * 0.20, w * 0.68, h * 0.60, w * 0.08); g.stroke();
+  g.beginPath();
+  for (let i = 1; i < 4; i++){
+    g.moveTo(w * (0.16 + i * 0.17), h * 0.20);
+    g.lineTo(w * (0.16 + i * 0.17), h * 0.80);
+  }
+  g.lineWidth = w * 0.05; g.stroke();
+});
+function trayIcon(fill){
+  return mk(S, S, (g, w, h) => {
+    g.fillStyle = '#5c4a86';
+    rrp(g, w * 0.14, h * 0.46, w * 0.72, h * 0.30, w * 0.09); g.fill();
+    g.strokeStyle = '#b9a8e8'; g.lineWidth = w * 0.05;
+    rrp(g, w * 0.14, h * 0.46, w * 0.72, h * 0.30, w * 0.09); g.stroke();
+    if (fill) drawDragonSprite(g, w * 0.62, h * 0.62, fill === 2 ? '#9ad6ff' : '#ffd166', false);
+  });
+}
+ART.tray = trayIcon(0);
+ART.trayHalf = trayIcon(2);
+ART.trayFull = trayIcon(1);
+
+ART.pwShuffle = mk(S, S, (g, w, h) => {
+  glyph(g, w, h, '#7dd3fc', () => {
+    g.beginPath();
+    g.moveTo(w * 0.18, h * 0.34); g.lineTo(w * 0.66, h * 0.34);
+    g.moveTo(w * 0.82, h * 0.66); g.lineTo(w * 0.34, h * 0.66);
+  });
+  g.fillStyle = '#7dd3fc';
+  g.beginPath();
+  g.moveTo(w * 0.82, h * 0.34); g.lineTo(w * 0.62, h * 0.22); g.lineTo(w * 0.62, h * 0.46);
+  g.closePath(); g.fill();
+  g.beginPath();
+  g.moveTo(w * 0.18, h * 0.66); g.lineTo(w * 0.38, h * 0.54); g.lineTo(w * 0.38, h * 0.78);
+  g.closePath(); g.fill();
+});
+ART.pwHand = mk(S, S, (g, w, h) => {
+  g.fillStyle = '#ffe0b8';
+  for (let i = 0; i < 3; i++){
+    rrp(g, w * (0.32 + i * 0.13), h * 0.18, w * 0.10, h * 0.26, w * 0.05);
+    g.fill();
+  }
+  rrp(g, w * 0.30, h * 0.34, w * 0.40, h * 0.44, w * 0.14); g.fill();
+  g.strokeStyle = '#c99a68'; g.lineWidth = w * 0.035;
+  rrp(g, w * 0.30, h * 0.34, w * 0.40, h * 0.44, w * 0.14); g.stroke();
+});
+ART.pwSuper = mk(S, S, (g, w, h) => {
+  const grd = g.createRadialGradient(w / 2, h / 2, 1, w / 2, h / 2, w * 0.45);
+  grd.addColorStop(0, '#fff6c8'); grd.addColorStop(1, '#ff9f43');
+  g.fillStyle = grd;
+  starp(g, w / 2, h / 2, w * 0.46, w * 0.19, 5); g.fill();
+  g.fillStyle = '#8a4a00';
+  g.beginPath(); g.arc(w / 2, h / 2, w * 0.09, 0, 6.2832); g.fill();
+});
+ART.pwSlot = mk(S, S, (g, w, h) => {
+  g.strokeStyle = '#8ef2b0'; g.lineWidth = w * 0.07;
+  rrp(g, w * 0.14, h * 0.30, w * 0.72, h * 0.40, w * 0.10); g.stroke();
+  glyph(g, w, h, '#8ef2b0', () => {
+    g.beginPath();
+    g.moveTo(w * 0.50, h * 0.36); g.lineTo(w * 0.50, h * 0.64);
+    g.moveTo(w * 0.36, h * 0.50); g.lineTo(w * 0.64, h * 0.50);
+  });
+});
+
+ART.heart = mk(S, S, (g, w, h) => {
+  const grd = g.createLinearGradient(0, 0, 0, h);
+  grd.addColorStop(0, '#ff8fa3'); grd.addColorStop(1, '#e03e5c');
+  g.fillStyle = grd;
+  g.beginPath();
+  g.moveTo(w / 2, h * 0.84);
+  g.bezierCurveTo(w * 0.02, h * 0.52, w * 0.16, h * 0.12, w / 2, h * 0.32);
+  g.bezierCurveTo(w * 0.84, h * 0.12, w * 0.98, h * 0.52, w / 2, h * 0.84);
+  g.closePath(); g.fill();
+  g.fillStyle = 'rgba(255,255,255,.5)';
+  g.beginPath(); g.ellipse(w * 0.34, h * 0.36, w * 0.10, h * 0.06, -0.5, 0, 6.2832); g.fill();
+});
+ART.heartEmpty = mk(S, S, (g, w, h) => {
+  g.strokeStyle = '#7b6a90'; g.lineWidth = w * 0.07;
+  g.beginPath();
+  g.moveTo(w / 2, h * 0.82);
+  g.bezierCurveTo(w * 0.05, h * 0.52, w * 0.18, h * 0.14, w / 2, h * 0.33);
+  g.bezierCurveTo(w * 0.82, h * 0.14, w * 0.95, h * 0.52, w / 2, h * 0.82);
+  g.closePath(); g.stroke();
+});
+ART.coin = mk(S, S, (g, w, h) => {
+  const grd = g.createLinearGradient(0, 0, 0, h);
+  grd.addColorStop(0, '#ffe9a3'); grd.addColorStop(1, '#e5a51b');
+  g.fillStyle = grd;
+  g.beginPath(); g.arc(w / 2, h / 2, w * 0.40, 0, 6.2832); g.fill();
+  g.strokeStyle = '#a9750c'; g.lineWidth = w * 0.05;
+  g.beginPath(); g.arc(w / 2, h / 2, w * 0.40, 0, 6.2832); g.stroke();
+  g.fillStyle = '#a9750c';
+  g.font = '800 ' + Math.round(h * 0.44) + 'px Segoe UI,system-ui,sans-serif';
+  g.textAlign = 'center'; g.textBaseline = 'middle';
+  g.fillText('B', w / 2, h * 0.54);
+});
+ART.star = mk(S, S, (g, w, h) => {
+  const grd = g.createLinearGradient(0, 0, 0, h);
+  grd.addColorStop(0, '#d8f4ff'); grd.addColorStop(1, '#38bdf8');
+  g.fillStyle = grd;
+  starp(g, w / 2, h * 0.52, w * 0.42, w * 0.18, 5); g.fill();
+});
+ART.check = mk(S, S, (g, w, h) => {
+  g.fillStyle = '#3fbf7a';
+  g.beginPath(); g.arc(w / 2, h / 2, w * 0.40, 0, 6.2832); g.fill();
+  glyph(g, w, h, '#0d2a1a', () => {
+    g.beginPath();
+    g.moveTo(w * 0.30, h * 0.52); g.lineTo(w * 0.45, h * 0.66); g.lineTo(w * 0.72, h * 0.36);
+  });
+});
+ART.avatar = mk(S, S, (g, w, h) => drawDragonSprite(g, w, h, '#7dd3fc', false));
+
+/* Powerups: the same six controllers as the original, icons mine. */
+const POWERUPS = [
+  { key: 'shuffle', art: 'pwShuffle', label: 'SHUF', desc: '큐 전체를 섞는다' },
+  { key: 'hand',    art: 'pwHand',    label: 'HAND', desc: '큐의 아무 하나를 집는다 (맨 앞 규칙 무시)' },
+  { key: 'super',   art: 'pwSuper',   label: 'SUPR', desc: '픽셀을 탭하면 특수 슈터가 그 색 덩어리를 관통 사격' },
+  { key: 'slot',    art: 'pwSlot',    label: '+SLT', desc: '캐리지를 1개 추가한다' },
+  { key: 'demolish',art: 'hammer',    label: 'DEMO', desc: '픽셀을 탭해 주변 반경 2칸을 파괴' },
+  { key: 'tray',    art: 'tray',      label: 'TRAY', desc: '맨 앞 하나를 트레이로 빼두고, 다시 눌러 되돌린다' }
+];
+const url = k => ART[k].toDataURL();
+
+const cv = document.getElementById('cv'), ctx = cv.getContext('2d');
+const $ = id => document.getElementById(id);
+
+let G = null;   // game state
+let L = null;   // layout (rebuilt on resize / level change)
+let lastNow = 0;
+/* One clock for the whole sim. step() stamps it, so input handlers and the
+   renderer agree even when the simulation is driven headlessly. */
+let clock = 0;
+const nowMs = () => clock || performance.now();
+
+/* ============================ level load ============================ */
+
+async function fetchLevel(n){          // the inlined PACK, not the network
+  const txt = PACK[n - 1].trim();
+  if (!txt.startsWith('gzip:')) return JSON.parse(txt);
+  const bin = Uint8Array.from(atob(txt.slice(5)), c => c.charCodeAt(0));
+  const stream = new Blob([bin]).stream().pipeThrough(new DecompressionStream('gzip'));
+  return await new Response(stream).json();
+}
+
+function buildState(n, raw){
+  const pid = raw.PixelImageData;
+  const W = pid.width, H = pid.height;
+  const owner = new Int32Array(W * H).fill(-1);
+  const pixels = [];
+  /* Hard pixels. `pixelHealths` is populated in 110 of the 2300 levels (681
+     entries, health 2..100) - the earlier claim that this funnel has none was
+     wrong. It matters for the ammo budget too: on those levels the per-material
+     ammo equals the SUM OF HEALTH, not the pixel count (42/110 match exactly;
+     the rest carry extra ammo for wall/door/cage features). So a shooter chips
+     a hard pixel over several passes, one point per shot (damagePerShot 1). */
+  const healths = new Map();
+  for (const e of (pid.pixelHealths || []))
+    healths.set(e.x + ',' + e.y, e.health || 1);
+
+  for (const p of pid.pixels){
+    const cells = [];
+    for (let dx = 0; dx < (p.areaX || 1); dx++)
+      for (let dy = 0; dy < (p.areaY || 1); dy++){
+        const x = p.x + dx, y = p.y + dy;
+        if (x >= 0 && y >= 0 && x < W && y < H) cells.push([x, y]);
+      }
+    if (!cells.length) continue;
+    const idx = pixels.length;
+    const hp = healths.get(p.x + ',' + p.y) || 1;
+    pixels.push({ mat: p.material, cells: cells, alive: true,
+                  hp: hp, hpMax: hp, inflight: 0 });
+    for (const c of cells) owner[c[1] * W + c[0]] = idx;
+  }
+
+  const st = {
+    n: n, raw: raw, W: W, H: H, pixels: pixels, owner: owner,
+    // PixelGridController.CalculatePixelSize: the picture has a physical size
+    // per level (5.0..7.0), so one cell is this many world units
+    cellWorld: (pid.physicalWidth || 6) / Math.max(W, H),
+    liveByMat: new Map(),          // material -> Set(pixelIdx) still alive
+    alivePerMat: new Map(),
+    remaining: 0,
+    slotCount: raw.SlotCount == null ? 5 : raw.SlotCount,
+    surprise: new Set((raw.SurpriseShooters && raw.SurpriseShooters.Shooters) || []),
+    queues: ((raw.QueueGroup && raw.QueueGroup.shooterQueues) || []).map(q =>
+      q.shooters.map(s => ({ id: s.id, mat: s.material, ammo: s.ammo }))),
+    slots: [],                     // carriages riding the loop
+    entrance: [],                  // the slot-entrance queue, dragons jumping in
+    shots: [],
+    pw: Object.assign({}, META.pw),   // bought in the shop\n    leaving: [],                      // fly-off effect
+    autoFin: false, ejectBuf: [], winAt: 0, failAt: 0, failWhy: '',
+    armed: null, tray: null, handBypass: null,
+    state: 'play', failReason: '', fired: 0, exits: 0, depleted: 0, stallSince: 0,
+    exitLog: [],
+    t0: performance.now()
+  };
+
+  for (let i = 0; i < pixels.length; i++){
+    const m = pixels[i].mat;
+    st.alivePerMat.set(m, (st.alivePerMat.get(m) || 0) + 1);
+    let s = st.liveByMat.get(m); if (!s) st.liveByMat.set(m, s = new Set());
+    s.add(i);
+    st.remaining++;
+  }
+
+  buildFeatures(st, raw);
+  return st;
+}
+
+/* ======================= level features =============================
+   The 2300 shipped levels use exactly twelve feature containers, all of them
+   attached to a shooter, a carriage or the belt - never to the picture. Shapes
+   below are measured across all 2300 levels; the rules are from the feature
+   controllers in reverse/disasm plus the game's own feature blurbs. Anything
+   marked INFERRED could not be pinned down from the binary alone.
+   ==================================================================== */
+
+function buildFeatures(st, raw){
+  const byId = new Map();
+  const reg = q => { for (const sh of q) byId.set(sh.id, sh); };
+  st.queues.forEach(reg);
+
+  // ShooterPipes {ShooterId, Queue{shooters[]}} - "Rescue all the dragons inside!"
+  // The pipe is itself a shooter that carries a nested queue; its contents take
+  // its place in the queue when it leaves, so all of them must be played.
+  st.pipes = 0;
+  for (const p of ((raw.ShooterPipes && raw.ShooterPipes.Pipes) || [])){
+    const host = byId.get(p.ShooterId);
+    const inner = ((p.Queue && p.Queue.shooters) || []).map(
+      s => ({ id: s.id, mat: s.material, ammo: s.ammo }));
+    inner.forEach(sh => byId.set(sh.id, sh));
+    if (!host) continue;
+    host.pipe = inner;
+    st.pipes++;
+  }
+
+  const flag = (ids, key, val) => {
+    for (const id of (ids || [])){
+      const sh = byId.get(id);
+      if (sh) sh[key] = (val === undefined ? true : val);
+    }
+  };
+
+  // SurpriseShooters [id] - colour hidden until it reaches the front
+  flag((raw.SurpriseShooters && raw.SurpriseShooters.Shooters), 'surprise');
+  // Locks [id] - "Release keys to open locks!"  Not tappable while locked.
+  flag((raw.Locks && raw.Locks.Shooters), 'locked');
+  // Hammers [id] - pairs with wood blocks, which this funnel's levels never
+  // contain, so the dragon plays normally and is only marked.
+  flag((raw.Hammers && raw.Hammers.Shooters), 'hammer');
+  // AstronautShooters [id] - pairs with a spaceship, likewise absent here.
+  flag((raw.AstronautShooters && raw.AstronautShooters.Shooters), 'astro');
+
+  // ConnectedShooters {Id, Shooters[]} - "They move together!"
+  st.group = new Map();
+  for (const c of ((raw.ConnectedShooters && raw.ConnectedShooters.Connections) || [])){
+    const ids = c.Shooters || [];
+    if (ids.length > 1) for (const id of ids) st.group.set(id, ids);
+  }
+  // ChainedShooters {Id, Shooters[]} - "Set the dragons free when they reach first
+  // in line!"  Shackled: untappable until any member of the chain is at the
+  // head of its queue, which frees the whole chain.
+  st.chains = [];
+  for (const c of ((raw.ChainedShooters && raw.ChainedShooters.Chains) || [])){
+    const ids = c.Shooters || [];
+    if (ids.length < 2) continue;
+    const ch = { ids: ids, broken: false };
+    st.chains.push(ch);
+    for (const id of ids){ const sh = byId.get(id); if (sh) sh.chain = ch; }
+  }
+  // ShooterIceBlocks {ShooterId, Health} - "Deplete other dragons to shatter their
+  // ice!"  INFERRED: Health counts shots fired by any other shooter.
+  for (const b of ((raw.ShooterIceBlocks && raw.ShooterIceBlocks.IceBlocks) || [])){
+    const sh = byId.get(b.ShooterId);
+    if (sh){ sh.ice = b.Health; sh.ice0 = b.Health; }
+  }
+  /* BullTotems {ShooterId, Count} - "Move the totem to the front, then send
+     piggies to chip away at it until it breaks!"
+     BullTotemFeature.OnShootersExitingQueue (0x5026524) -> CheckActivation
+     (0x5024ba8) -> PlayActivate / PlayHit (0x5024730): the totem ACTIVATES when
+     its shooter reaches the head, and is then a shot target. It is an obstacle,
+     which the offense controller handles specially - FilterObstacleTargets
+     (0x4ece4dc), IsTargetObstacle (0x4ece1a4), HitTarget.MatchAllTargets - so
+     any colour can hit it and it takes priority over pixels.
+     Here it is chipped one per shot fired by any other shooter [?]. A faithful
+     Round-3 audit: the decrement really is keyed to queue exits, but with a
+     3-condition population filter and an activation latch (see tickFeatures).
+     A faithful port must ALSO put the totem in the target list as an obstacle with
+     priority; keying it to queue exits (an earlier guess here) deadlocks any
+     level whose every queue head is a totem, e.g. level 1574. */
+  for (const t of ((raw.BullTotems && raw.BullTotems.Totems) || [])){
+    const sh = byId.get(t.ShooterId);
+    if (sh){ sh.totem = t.Count; sh.totem0 = t.Count; }
+  }
+  // MusicToyMallets {ShooterId, Material} - the notes it should strike are not
+  // in this funnel's data, so the mallet is marked and plays normally.
+  for (const m of ((raw.MusicToyMallets && raw.MusicToyMallets.Mallets) || [])){
+    const sh = byId.get(m.ShooterId);
+    if (sh) sh.mallet = m.Material;
+  }
+  // SlotCages {SlotIndex, Material, Health} - "Collect pixels to blast the door
+  // open and unlock the blocked slot!"  Health pixels of Material must die.
+  st.cages = ((raw.SlotCages && raw.SlotCages.Cages) || []).map(c => ({
+    slot: c.SlotIndex, mat: c.Material, need: c.Health, got: 0, open: false }));
+  // ConveyorDoors {Percent, Material, Health} - "Pass walls with same color
+  // dragons to destroy the walls!"  A gate at Percent of the loop; only matching
+  // dragons may cross, and each crossing costs the door one health.
+  st.doors = ((raw.ConveyorDoors && raw.ConveyorDoors.Doors) || []).map(d => ({
+    pct: d.Percent, mat: d.Material, health: d.Health, health0: d.Health }));
+
+  st.byId = byId;
+}
+
+/* CheckShooterTargetIsReserved (0x4ed4e6c) stops two shooters wasting ammo on
+   the same target. With health it has to count the shots in flight against the
+   health still standing, or a 6-health pixel would only ever be shot once. */
+const isReserved = p => p.inflight >= p.hp;
+
+/* One shot, one point of damage, one cell (damagePerShot 1 [A]). A pixel with
+   health left stays solid and keeps blocking the line behind it. */
+function killPixel(st, idx){
+  const p = st.pixels[idx];
+  if (!p.alive) return;
+  if (p.inflight > 0) p.inflight--;
+  if (--p.hp > 0) return;                 // chipped, not dead
+  p.alive = false;
+  st.remaining--;
+  st.alivePerMat.set(p.mat, (st.alivePerMat.get(p.mat) || 1) - 1);
+  const live = st.liveByMat.get(p.mat); if (live) live.delete(idx);
+  /* SlotCageFeature.OnTargetDeath (0x5193940) checks Pixel.get_IsBigPixel
+     (0x4f342e0) and bails before incrementing, so a multi-cell pixel does NOT
+     count toward the cage. */
+  if (p.cells.length === 1)
+    for (const c of st.cages)
+      if (!c.open && c.mat === p.mat && ++c.got >= c.need) c.open = true;
+}
+
+const slotBlocked = (st, i) => st.cages.some(c => c.slot === i && !c.open);
+
+// ConveyorController.get_EmptySlotCount / CanReceiveItemCount (0x52718b0)
+/* ConveyorItemSlot.Return (0x4fc68a4) is an animation: the carriage jumps back
+   to slotReturnPoint over `returnMoveDuration` (+0x78) with `returnJumpHeight`
+   (+0x68), so for that moment it exists but cannot take a shooter. That is why
+   a shooter which survives a lap goes to the ENTRANCE QUEUE instead of straight
+   back onto the belt: TryPlaceShooterToEmptySlot's TryGetFree branch finds
+   nothing, and SlotEntranceQueueController.TryEnqueue (0x52bd740) accepts it -
+   with the queue non-empty it accepts unconditionally (`cbnz w8` at 0x52bd788),
+   and with the queue empty it only asks the conveyor whether it has room, which
+   a carriage on its way back still counts toward. So:
+     - CanReceiveItemCount / emptySlotCount: a carriage with no shooter counts,
+       returning or not (it is about to be available).
+     - "board it now" (the entrance drain, and the free-slot branch below): a
+       returning carriage is skipped.
+   `returnMoveDuration` is a measured serialized value: 0.25 s (9.1). Setting it
+   to 0 is what made the first build re-board instantly and never use the queue. */
+const RETURN_MS = 250;                  // [A] ConveyorItemSlot.returnMoveDuration
+const returning = s => (s.returnUntil || 0) > nowMs();
+const emptySlotCount = st =>
+  st.slots.reduce((a, s, i) => a + (!s.dragon && !slotBlocked(st, i) ? 1 : 0), 0);
+const canReceiveItemCount = st => emptySlotCount(st);
+
+/* Why a shooter cannot be tapped right now, or null if it can. */
+function tapBlock(st, sh){
+  if (sh.locked) return '자물쇠 — 잠긴 드래곤';
+  if (sh.ice > 0) return '얼음 ' + sh.ice + ' — 다른 드래곤이 큐를 떠날 때마다 1씩 깨짐';
+  if (sh.totem > 0) return '토템 ' + sh.totem + ' — 맨 앞에 온 뒤 다른 드래곤을 더 보내야 함';
+  if (sh.chain && !sh.chain.broken) return '족쇄 — 체인이 맨 앞에 와야 풀림';
+  return null;
+}
+
+/* =========================== directional scan =======================
+   PixelGridController.ScanDirectionalPixels: walk a column from the shooter's
+   side of the picture and return the first pixel found. Data y grows upward,
+   so an Up-facing shooter (riding the bottom stretch) starts at y = 0 and a
+   Down-facing one (top stretch) starts at y = H - 1.
+   ================================================================== */
+
+/* FirstSolidsFromSideAxis (0x4ecfb08) -> TryToFillSolidTargetDataListOnPoint
+   (0x4ecff98): walk one line of the grid inward from the edge the shooter rides
+   and return the FIRST SOLID pixel, whatever its colour. The colour test is a
+   separate step - IsValidTarget (0x4ed3514) calls Shooter::get_Material - so a
+   pixel of another colour sitting in front of yours BLOCKS it. That is the
+   whole puzzle: the picture has to be peeled in the order its colours allow. */
+function scanLine(st, side){
+  if (!side) return -1;
+  let x = side.x, y = side.y;
+  const n = side.dx ? st.W : st.H;
+  for (let k = 0; k < n; k++, x += side.dx, y += side.dy){
+    if (x < 0 || y < 0 || x >= st.W || y >= st.H) break;
+    const o = st.owner[y * st.W + x];
+    if (o >= 0 && st.pixels[o].alive) return o;   // first solid, colour ignored
+  }
+  return -1;
+}
+
+// IsValidTarget: the front pixel is only a target if it is this shooter's colour
+const validTarget = (st, idx, mat) =>
+  idx >= 0 && !isReserved(st.pixels[idx]) && (mat < 0 || st.pixels[idx].mat === mat);
+
+/* SurpriseShooters carry a placeholder material that owns no pixel in the level
+   (material 1, 77330 rounds of ammo against 68322 pixels of that id, and most
+   of those pixels are in other funnels) - the real colour is decided at reveal
+   time by SurpriseShooterFeatureController (HandleFirstShooterReveal). That
+   feature's choice is not in the APK, so this picks the live colour that is
+   most useful right now. INVENTED, but it keeps the dragon a real colour carrier,
+   which is what the original does - there is no "shoots anything" wildcard in
+   IsValidTarget (0x4ed3514); its only early-out is Shooter.IsDeactivated
+
+/* Revealing a surprise shooter is PURELY VISUAL.
+   SurpriseShooterFeature.Reveal (0x5209e10) is
+   ShooterAnimationController.JumpStationary (0x4eed1d4) + PlayRevealVfx
+   (0x5209cdc) + a virtual tail-call - it never touches the material. The colour
+   in the level data is the real one all along; the feature only hides it until
+   the shooter reaches the head of its queue (HandleFirstShooterReveal
+   0x520a764, driven by OnMapQueueShooterChangedCallback 0x520a718).
+   Proof from the data: with the stored colours, per-material ammo equals the
+   sum of pixel health EXACTLY on levels 9 (13 surprise shooters), 11 (10), 5,
+   20, 24 - so re-picking a colour at reveal time, as an earlier version of this
+   file did, broke the ammo invariant (11.1). */
+function revealShooter(st, sh){
+  if (sh.revealed) return;
+  sh.revealed = true;
+}
+
+/* ShootersOffenseController.GetShooterSide (libil2cpp.so 0x4ecaab8):
+
+     side = (abs(dx) < abs(dz)) ? (dz < 0 ? 2 : 3) : (dx >= 0 ? 1 : 0)
+     // 0 = -X left, 1 = +X right, 2 = -Z bottom, 3 = +Z top
+
+   dx/dz are the shooter's offset from the grid centre, compared as RAW absolute
+   values - the split between the left/right and bottom/top faces is a 45 degree
+   diagonal no matter how oblong the picture is. FindFrontTargetBest then scans
+   rows for sides 0/1 and columns for sides 2/3. */
+function slotScan(slot){
+  const p = pathPoint(L.path, slot.s);
+  const dx = p[0] - (L.gx + L.gw / 2);
+  const dy = p[1] - (L.gy + L.gh / 2);
+
+  if (Math.abs(dx) >= Math.abs(dy)){
+    // side 0 / 1: scan a row inward from the left or right edge
+    const inward = dx < 0;
+    return {
+      axis: 'row', n: G.H,
+      at: (p[1] - L.gy) / L.cell,                  // screen row, fractional
+      line: row => (row < 0 || row >= G.H) ? null : (inward
+        ? { x: 0,       y: G.H - 1 - row, dx: 1,  dy: 0 }
+        : { x: G.W - 1, y: G.H - 1 - row, dx: -1, dy: 0 })
+    };
+  }
+  // side 2 / 3: scan a column inward from the bottom or top edge
+  const up = dy > 0;
+  return {
+    axis: 'col', n: G.W,
+    at: (p[0] - L.gx) / L.cell,                    // column, fractional
+    line: col => (col < 0 || col >= G.W) ? null : (up
+      ? { x: col, y: 0,       dx: 0, dy: 1 }
+      : { x: col, y: G.H - 1, dx: 0, dy: -1 })
+  };
+}
+
+// What this carriage can shoot from where it is right now.
+function pickTarget(st, slot){
+  if (COLUMN_SCAN){
+    // FindFrontTargetBest (0x4ed3b00) + GatherAlignedRows/Cols (0x4ecdc14 /
+    // 0x4ed0204): every line within an alignment tolerance is a candidate,
+    // walked nearest-aligned first, and the first valid unreserved front pixel
+    // wins. The real tolerance is a serialized field we cannot read, so
+    // ALIGN_TOL stands in for it.
+    const mat = slot.dragon.mat;
+    const g = slotScan(slot);
+    const home = Math.floor(g.at);
+    // world tolerance -> cells: cellWorld = physicalWidth / width
+    const tol = Math.max(1, Math.round(ALIGN_TOLERANCE_WORLD / st.cellWorld));
+    for (let d = 0; d <= tol; d++){
+      for (const s of (d ? [-d, d] : [0])){
+        const side = g.line(home + s);
+        if (!side) continue;
+        const idx = scanLine(st, side);
+        if (validTarget(st, idx, mat)){ slot.aim = home + s; return idx; }
+      }
+    }
+    return -1;
+  }
+
+  const set = st.liveByMat.get(slot.dragon.mat);
+  if (!set || !set.size) return -1;
+  const p0 = pathPoint(L.path, slot.s);
+  const cx = (p0[0] - L.gx) / L.cell, cy = G.H - 1 - (p0[1] - L.gy) / L.cell;
+  let best = -1, bestD = Infinity;
+  for (const idx of set){
+    const p = st.pixels[idx];
+    if (!p.alive || isReserved(p)) continue;
+    for (const c of p.cells){
+      const dx = c[0] - cx, dy = c[1] - cy;
+      const d = dx * dx + dy * dy;
+      if (d < bestD){ bestD = d; best = idx; }
+    }
+  }
+  return best;
+}
+
+// Is there any column at all whose surface pixel this material could hit?
+function matHasFront(st, mat){
+  const f = mat;
+  const ok = side => { const i = scanLine(st, side); return validTarget(st, i, f); };
+  for (let col = 0; col < st.W; col++){
+    if (ok({ x: col, y: 0, dx: 0, dy: 1 })) return true;
+    if (ok({ x: col, y: st.H - 1, dx: 0, dy: -1 })) return true;
+  }
+  for (let y = 0; y < st.H; y++){
+    if (ok({ x: 0, y: y, dx: 1, dy: 0 })) return true;
+    if (ok({ x: st.W - 1, y: y, dx: -1, dy: 0 })) return true;
+  }
+  return false;
+}
+
+const canEverShoot = (st, mat) => COLUMN_SCAN
+  ? matHasFront(st, mat)
+  : st.alivePerMat.get(mat) > 0;
+
+/* ====================== conveyor path (spline loop) ================== */
+
+function buildPath(x0, y0, x1, y1, r){
+  const pts = [];
+  const arc = (cx, cy, a0, a1) => {
+    for (let i = 0; i <= 8; i++){
+      const a = a0 + (a1 - a0) * i / 8;
+      pts.push([cx + Math.cos(a) * r, cy + Math.sin(a) * r]);
+    }
+  };
+  // clockwise on screen, starting at the top-left corner heading right
+  pts.push([x0 + r, y0]);
+  pts.push([x1 - r, y0]);
+  arc(x1 - r, y0 + r, -Math.PI / 2, 0);
+  pts.push([x1, y1 - r]);
+  arc(x1 - r, y1 - r, 0, Math.PI / 2);
+  pts.push([x0 + r, y1]);
+  arc(x0 + r, y1 - r, Math.PI / 2, Math.PI);
+  pts.push([x0, y0 + r]);
+  arc(x0 + r, y0 + r, Math.PI, Math.PI * 1.5);
+
+  const cum = [0];
+  for (let i = 1; i < pts.length; i++)
+    cum.push(cum[i-1] + Math.hypot(pts[i][0] - pts[i-1][0], pts[i][1] - pts[i-1][1]));
+  const total = cum[cum.length-1]
+    + Math.hypot(pts[0][0] - pts[pts.length-1][0], pts[0][1] - pts[pts.length-1][1]);
+  return { pts: pts, cum: cum, total: total };
+}
+
+// Arc length of the loop's bottom-right extreme: the seam where carriages
+// board (slotStartPoint) and, when finished, leave (slotReturnPoint).
+function pathSeam(path){
+  let best = 0, bestV = -Infinity;
+  for (let i = 0; i < path.pts.length; i++){
+    const v = path.pts[i][0] + path.pts[i][1];
+    if (v > bestV){ bestV = v; best = i; }
+  }
+  return path.cum[best] || 0;
+}
+
+function pathPoint(path, s){
+  const pts = path.pts, cum = path.cum, total = path.total;
+  s = ((s % total) + total) % total;
+  let i = 1;
+  while (i < cum.length && cum[i] < s) i++;
+  const a = pts[(i - 1) % pts.length], b = pts[i % pts.length];
+  const s0 = cum[i - 1], s1 = (i < cum.length ? cum[i] : total);
+  const k = s1 > s0 ? (s - s0) / (s1 - s0) : 0;
+  return [a[0] + (b[0] - a[0]) * k, a[1] + (b[1] - a[1]) * k];
+}
+
+/* ============================ player input ============================ */
+
+let bumpMsg = '', bumpAt = 0;
+const bump = m => { bumpMsg = m; bumpAt = nowMs(); };
+
+/* MapLogic.ExecuteTap -> SlotEntranceQueueController.TryEnqueue. The tap does
+   not put the dragon on the belt: it acquires an entrance slot (AcquireQueueSlot),
+   animates a jump to it (StartJump / JumpToQueueSlot), and only once
+   HasShooterArrived does TryDrainToSlots hand it to a free carriage. A roped
+   group enqueues together, one entrance slot each. */
+function tapQueue(qi){
+  if (!G || G.state !== 'play' || !L) return;
+  const q = G.queues[qi];
+  if (!q || !q.length) return;
+
+  const front = q[0];
+  const bypass = G.handBypass === front;      // Hand powerup, one tap only
+
+  /* MapController.ExecuteTap (0x52936f4): a shooter that carries a tap-logic
+     feature does NOT board - the tap raises TriggerTapShooterWithLogic
+     (0x527c984) and that feature acts instead. The branch is just
+     "feature != null" (0x5541028 = !isNull). The only thing that refuses the
+     tap outright is MapTapBlocker (0x52b6e5c), which is a tutorial whitelist
+     and knows nothing about features. So an iced dragon IS tappable: its
+     ShooterIceBlockFeatureController.OnTapShooterWithLogic (0x518ab64) takes
+     1 off its own ice. That is the second ice damage source, alongside the
+     per-queue-exit chipping in tickFeatures. */
+  if (!bypass && front.ice > 0){
+    front.ice = Math.max(0, front.ice - 1);
+    bump(front.ice > 0 ? '얼음 ' + front.ice + ' — 탭으로 1 깨짐' : '얼음 깨짐!');
+    return;
+  }
+
+  const why = bypass ? null : tapBlock(G, front);
+  if (why){ bump(why); return; }
+
+  const ids = G.group.get(front.id);
+  const picks = [];
+  if (ids){
+    /* ConnectedShooterCanTapCondition.IsAllTappableAndInQueue (0x5043d38) is
+         if (!allTappable(member)) return false;      // this+0x28 delegate
+         return MapProvider.IsShooterInMapQueue(member);   // 0x52b7988
+       and the sibling test is IsShooterBlockedInFront (0x5043e34), with
+       ShooterQueueController.GetInFrontShooters (0x4ee4c18) supplying "who is
+       ahead of me". So a roped group is only tappable when NO member has
+       anything in front of it - every one of them has to be at the head of its
+       own queue. A member already aboard (or on a pad) is exempt: IsInConveyor
+       (0x5044010) takes it out of the check.
+       The `allTappable` delegate itself is serialized and unreadable [X]; the
+       "all members at the front" reading is the game's own behaviour. */
+    let notAtFront = 0;
+    for (const id of ids){
+      let placed = null;
+      for (const qq of G.queues){
+        const at = qq.findIndex(s => s.id === id);
+        if (at >= 0){ placed = { sh: qq[at], at: at }; break; }
+      }
+      if (!placed) continue;                 // already aboard: exempt
+      if (placed.at !== 0){ notAtFront++; continue; }
+      picks.push(placed.sh);
+    }
+    if (!bypass && notAtFront){
+      bump('연결된 대포 ' + notAtFront + '기가 아직 맨 앞이 아니다');
+      return;
+    }
+    if (!picks.length) return;
+    // a roped partner that is itself still shackled or frozen holds them all
+    if (!bypass) for (const sh of picks){
+      const w = tapBlock(G, sh);
+      if (w){ bump('연결된 드래곤: ' + w); return; }
+    }
+  } else picks.push(front);
+
+  /* The whole admission rule for a tap is CanReceiveItemCount(n). A roped group
+     boards together, so it needs that many carriages at once. The waiting queue
+     does not enter into it - a tapped shooter goes on the belt or not at all. */
+  if (freeCarriages() < picks.length){
+    bump(picks.length > 1 ? '연결된 드래곤용 캐리지 부족' : '빈 캐리지 없음');
+    return;
+  }
+  const now = nowMs();
+  for (const sh of picks){
+    let from = null;
+    for (let k = 0; k < G.queues.length; k++){
+      const at = G.queues[k].indexOf(sh);
+      if (at < 0) continue;
+      const r = queueRect(k, Math.min(at, L.qRows - 1));
+      from = [r[0] + r[2] / 2, r[1] + r[3] / 2];
+      // ShooterPipeFeature: the pipe's contents take its place in the queue
+      const inner = sh.pipe && sh.pipe.length ? sh.pipe : null;
+      G.queues[k].splice(at, 1, ...(inner || []));
+      if (inner) sh.pipe = null;
+      break;
+    }
+    revealShooter(G, sh);
+    // TryPlaceShootersToConveyor -> TryActivateSlot: straight onto a carriage,
+    // with the hop drawn from where it stood in the queue
+    const fi = freeCarriage();
+    if (fi < 0) break;               // gated above; cannot normally happen
+    boardSlot(G.slots[fi], sh, from);
+    G.exits++;                       // OnShootersExitingQueue
+    G.exitLog.push(sh);              // who left, for the ice/totem population
+  }
+}
+
+/* Feature bookkeeping that runs once per simulation step. */
+function tickFeatures(st, shotsThisStep, exitsThisStep, depletions){   // shots unused since round 3
+  // SurpriseShooterFeatureController.HandleFirstShooterReveal: the colour shows
+  // once the dragon is at the head of its queue
+  for (const q of st.queues) if (q.length) revealShooter(st, q[0]);
+
+  // ChainedShooterFeature: any member reaching the head of its queue frees all
+  for (const ch of st.chains){
+    if (ch.broken) continue;
+    for (const q of st.queues)
+      if (q.length && ch.ids.indexOf(q[0].id) >= 0){ ch.broken = true; break; }
+  }
+  /* Everything below keys off WHO left a queue this step, not off shots fired.
+     ShooterIceBlockFeatureController.OnShooterWillDisappear (0x518ae4c):
+       if (!hasIceInLevel) return;                     // cdq +0x48, set in
+                                                       // OnLevelCreated 0x518b054
+       if (isShooterDisabledCondition(shooter)) return; // vtable +0x188
+       counter++; ExecuteIceDamage();                   // 0x518ac48
+     ExecuteIceDamage builds DamageInfo(amount = counter), calls DamageIceBlocks
+     (0x518a8a0) which walks EVERY ShooterIceBlockFeature attached to the level,
+     then resets the counter (str wzr,[x19,#0x4c]).  Since that is its only
+     caller the effective damage is 1 per event - and it lands on every ice
+     block at once.  That is what makes Health up to 116 reachable: a level has
+     dozens to a hundred-odd shooters, not 116 shots.  (The earlier guess here -
+     "one per shot fired" - was wrong.) */
+  const exited = st.exitLog;
+  st.exitLog = [];
+  if (exited.length) for (const sh of st.byId.values())
+    if (sh.ice > 0) sh.ice = Math.max(0, sh.ice - exited.length);
+
+  /* BullTotemFeature.  Two verified pieces:
+     CheckActivation (0x5024ba8) is a one-shot latch that only fires once the
+     totem's own shooter reaches the HEAD of its queue
+     (isShooterFirstInQueueCondition +0x70), and on firing it snapshots a global
+     counter (0xaae6178) into +0xa8 - which is how the activation frame itself
+     is skipped by the decrement path (0x50266bc compares it back).
+     OnShootersExitingQueue (0x5026524) then counts, out of a global list, only
+     the entries that are (1) not this totem's own paired shooter, (2) still
+     valid, and (3) not claimed by another totem - and does
+     Count = max(Count - n, 0).  countSyncPowerupChannels (+0x68) is itself an
+     enumerable, not the counter.
+     At Count <= 0 DestroySelf (0x50244d0) fires TriggerMakeShooterDisappear on
+     the paired shooter.  This port only clears the gate instead: removing the
+     shooter would delete its 10-50 ammo and leave its colour's pixels
+     unshootable, which the ammo invariant (11.1) forbids.  Flagged in
+     UNITY_SPEC.md 7.7. */
+  for (const sh of st.byId.values()){
+    if (!(sh.totem > 0)) continue;
+    if (!sh.totemActive){
+      for (const q of st.queues) if (q.length && q[0] === sh){ sh.totemActive = true; break; }
+      continue;                        // the activation step never decrements
+    }
+    const n = exited.reduce((a, e) => a + (e !== sh && !(e.totem > 0) ? 1 : 0), 0);
+    if (n) sh.totem = Math.max(0, sh.totem - n);
+  }
+  // LockKeyFeatureController: each depleted shooter releases one key, and
+  // SortLocksFromLeftToRight opens the leftmost lock first. INFERRED - the key
+  // objects themselves are not in this funnel's level data.
+  /* LockFeature.IsAvailableToUnlock (0x50ea05c) is
+       isShooterFirstInQueueCondition.Call(owner) && !IsUnlocked
+     so only a lock whose own shooter is at the head of its queue is a
+     candidate; SortLocksFromLeftToRight (0x50eb240) then picks the leftmost.
+     What actually releases a key is a picture-attached KeyFeature (Unlock
+     0x50e7fec) driven by OnReleasablesUnblocked (0x50ea2ec) - and this funnel's
+     level JSON carries no key objects at all, so the trigger below (one key per
+     depleted shooter) is INVENTED. */
+  for (let d = 0; d < depletions; d++){
+    let best = null;
+    for (let qi = 0; qi < st.queues.length; qi++){
+      const head = st.queues[qi][0];
+      if (head && head.locked){ best = head; break; }   // leftmost queue first
+    }
+    if (!best) break;
+    best.locked = false;
+  }
+}
+
+/* MapController.HandleConveyorExit (0x529a214): the shooter that just came off
+   the belt is cast to Shooter, and if it is not already flagged gone
+   ([+0x74] / [+0x76]) it goes to TryPlaceShooterToEmptySlot (0x528d668):
+
+       if (entranceQueue.HasPending && entranceQueue.TryEnqueue(sh)) return;
+       if (slotGroup.TryGetFree(out slot)) { PlaceShooterToSlot(sh, slot); return; }
+       if (entranceQueue.TryEnqueue(sh)) return;
+       MapEvents.TriggerSlotsFullAtConveyorExit(sh);   // 0x52856f0
+
+   so it is NEVER thrown away - it goes back to the waiting area with its
+   remaining ammo, which is what keeps the per-material ammo == pixel count
+   invariant true. Only when both the entrance queue and the slot group refuse
+   it does the last line fire, and MapFailController.OnSlotsFullAtConveyorExit
+   (0x52a3b18) turns that into a fail. */
+/* TryActivateSlot is what actually puts a shooter on the belt, so the carriage
+   is taken the moment a placement is accepted - the hop is only the model
+   catching up (ConveyorItemSlot.Prepare, 6.3). `boardFrom`/`boardT0` drive that
+   hop, and the shooter holds its fire until it lands. */
+function boardSlot(slot, dragon, from){
+  slot.dragon = dragon;
+  slot.nextFire = nowMs();
+  slot.idle = true;
+  slot.s = L.entryS;                  // slotStartPoint
+  slot.travel = 0;
+  slot.boardFrom = from || null;
+  slot.boardT0 = nowMs();
+}
+const boarding = slot => slot.boardT0 && nowMs() - slot.boardT0 < JUMP_MS;
+
+/* SlotEntranceQueueController.TryEnqueue (0x52bd740), all 39 instructions:
+
+       var pending = this[+0x60];
+       if (pending.Count != 0) goto accept;                  // cbnz w8 @0x52bd788
+       if (!ConveyorHasRoom(get_Conveyor())) return false;    // 0x5cfb568
+     accept:
+       StartJump(CreateEntry(sh));                            // 0x52bd384 -> 0x52bcf30
+       return true;
+
+   So the belt is consulted ONLY when the waiting queue is empty; once anyone is
+   waiting, every further shooter is accepted no matter how full the belt is.
+   That is what lets the waiting area fill up. Gating every enqueue on free
+   carriages (the first version here) meant it could never hold more than the
+   belt had room for, so a shooter coming off the belt flashed through it in one
+   jump - which is exactly what it looked like. */
+function freeCarriage(){
+  return G.slots.findIndex((s, k) => !s.dragon && !returning(s) && !slotBlocked(G, k));
+}
+/* ConveyorController.CanReceiveItemCount(n) (0x52718b0) is literally
+   `get_EmptySlotCount() >= n` - no reservation ledger, no entrance pads. It is
+   the ONLY gate on a tap (ExecuteTap -> GetShootersToPlaceToConveyor ->
+   TryPlaceShootersToConveyor), so with every carriage busy a tap does nothing:
+   a tapped shooter can never park in the waiting queue. */
+const freeCarriages = () =>
+  G.slots.reduce((a, s, k) => a + (!s.dragon && !returning(s) && !slotBlocked(G, k) ? 1 : 0), 0);
+
+/* TryEnqueue (0x52bd740). Its only callers are TryPlaceShooterToEmptySlot (the
+   conveyor exit) and the pipe insert - never a tap. A free pad accepts
+   unconditionally; with none free it only accepts if the conveyor can take the
+   shooter right now, which means going straight back onto a carriage. */
+function tryEnqueueEntrance(dragon, from){
+  if (G.entrance.length < ENTRANCE_CAP){          // a pad is free: accept
+    G.entrance.push({ dragon: dragon, from: from, t0: nowMs() });
+    return true;
+  }
+  const i = freeCarriage();
+  if (i >= 0){ boardSlot(G.slots[i], dragon, from); return true; }
+  return false;
+}
+
+function exitToWaiting(dragon, from){
+  if (G.entrance.length < ENTRANCE_CAP){                 // a pad is free
+    tryEnqueueEntrance(dragon, from);
+    return;
+  }
+  /* The waiting area is full, so the shooter that just finished its lap has
+     nowhere to stand: MapEvents.TriggerSlotsFullAtConveyorExit (0x52856f0) ->
+     MapFailController (0x52a3b18) -> FailGame. Game over.
+
+     TryPlaceShooterToEmptySlot does carry a middle branch that would drop it
+     straight onto a free carriage instead, but nothing boards without a tap in
+     this build (see the entrance-drain note), so that branch is deliberately
+     not taken - a full waiting area is a loss. */
+  G.lostAtExit = (G.lostAtExit || 0) + 1;
+  pendFail(slotsFullReason(true));
+}
+
+/* MapFailController.OnSlotsFullAtConveyorExit (0x52a3b18):
+     if (CanShootAnyTargetNew()) TriggerOutOfSpaceFail();
+     else                        TryCheckForCannotShootFail();
+   and that coroutine runs the 6.7 discriminator - queue heads first
+   (Locked > Frozen > BullTotem, largest group wins, ties in that order), then
+   the grid group (Spaceship > Curtain > Ufo, none of which exist in this
+   funnel's 2300 levels, 7.13), falling back to Obstacle. */
+function slotsFullReason(fromExit){
+  // OutOfSpace belongs to the exit event only; the stall path is
+  // CheckForCannotShootFail, which has no such reason (6.7).
+  if (fromExit && canShootAnyTarget()) return '출구 만석 — Out of Space';
+  // NormallyTappableFirstShooterExists (0x52a2930): a clean head skips step 3
+  const heads = G.queues.map(q => q[0]).filter(Boolean);
+  const tappable = heads.some(sh => !tapBlock(G, sh));
+  if (!tappable){
+    const groups = [
+      ['자물쇠로 막힘 — LockedOut', heads.filter(sh => sh.locked).length],
+      ['얼음으로 막힘 — Frozen',    heads.filter(sh => sh.ice > 0).length],
+      ['토템으로 막힘 — BullTotem', heads.filter(sh => sh.totem > 0).length]
+    ];
+    let best = groups[0];
+    for (const g of groups) if (g[1] > best[1]) best = g;   // ties keep the order
+    if (best[1] > 0) return best[0];
+  }
+  return '장애물로 막힘 — Obstacle';
+}
+
+/* ============================== simulation ============================== */
+
+/* ===================== AutoFinisher (6.8) =====================
+   MapController.TryActivateAutoFinisher (0x528d43c) latches ONCE when the
+   remaining shooter count is <= the belt's slot count, and is rechecked
+   whenever a shooter disappears (MakeShooterDisappear is one of its three call
+   sites). Its two subscribers set the conveyor's `cks` - which stops items
+   being removed at the path end - and DetachAllWalls. The level flag
+   `triggerAutoFinisher` is not in this funnel's level JSON, so it is treated as
+   set [?]. */
+function remainingShooters(){
+  let n = 0;
+  for (const q of G.queues) for (const sh of q){
+    n++;
+    if (sh.pipe) n += sh.pipe.length;
+  }
+  n += G.entrance.length;
+  for (const sl of G.slots) if (sl.dragon) n++;
+  if (G.tray) n++;
+  return n;
+}
+function tryActivateAutoFinisher(){
+  if (!G || G.autoFin) return;
+  if (remainingShooters() > G.slots.length) return;
+  G.autoFin = true;
+  for (const d of G.doors) d.health = 0;      // WallFeatureController.DetachAllWalls
+  bump('오토피니셔 — 벨트 2배, 벽 해제');
+}
+
+// GameFinishController: a fail is announced after instantFailDelay and a win
+// after checkCompleteDelay (9.1). Both latch so the reason cannot flip.
+function pendFail(reason){
+  if (G.failAt) return;
+  G.failAt = nowMs() + FAIL_DELAY_MS;
+  G.failWhy = reason;
+}
+
+/* ===================== the frame, in 6.6 order =====================
+   ConveyorController.Update runs its item list in three passes with named steps
+   between them; they are split out here so the order is explicit. */
+function cleanupSlots(){
+  // CleanupSlots 0x5267448: drop dead entries. Here, a carriage whose return
+  // trip is over becomes available again.
+  for (const sl of G.slots) if (sl.returnUntil && sl.returnUntil <= nowMs()) sl.returnUntil = 0;
+}
+
+function refreshGateBuffer(){
+  // RefreshGateBuffer 0x5267668: the live gates, ordered along the path.
+  G.gateBuf = G.doors.filter(d => d.health > 0).sort((a, b) => a.pct - b.pct);
+}
+
+function checkCheckpoints(from, to, total){
+  /* CheckCheckpoints 0x52679c4. The serialized list is one entry,
+     { id: "fail_warning", percent: 0.5 } (9.1), and the level JSON carries no
+     checkpoint data - so this only records crossings. */
+  for (const c of (G.checkpoints || [{ id: 'fail_warning', percent: 0.5 }])){
+    const at = c.percent * total;
+    if (from <= at && to >= at) G.checkpointHits = (G.checkpointHits || 0) + 1;
+  }
+}
+
+function processEjects(){
+  // ProcessEjects 0x5267da0: everything the gate pass marked leaves the belt.
+  if (!G.ejectBuf || !G.ejectBuf.length) return;
+  for (const sl of G.ejectBuf){
+    if (!sl.dragon) continue;
+    sl.dragon = null; sl.travel = 0;
+    sl.returnUntil = nowMs() + RETURN_MS;
+    G.depleted++; G.ejected = (G.ejected || 0) + 1;
+  }
+  G.ejectBuf.length = 0;
+  tryActivateAutoFinisher();
+}
+
+function step(now, dt){
+  clock = now;
+  if (G.state !== 'play' || !L) return;
+
+  const shots0 = G.fired, exits0 = G.exits, dep0 = G.depleted;
+  const pxPerWorld = L.gw / (G.raw.PixelImageData.physicalWidth || 6);
+  const total = L.path.total;
+  /* clipStart / clipEnd (9.1): the usable stretch of the spline is
+     [clipStart, clipEnd] = [0, 0.995], so a lap is 0.995 of the path and the
+     seam sits at clipEnd, not at 1.0. */
+  const lapLen = (CLIP_END - CLIP_START) * total;
+  const move = BELT_SPEED_WORLD * beltMult() * pxPerWorld * dt;
+
+  // ---- pass 0: CleanupSlots ----
+  cleanupSlots();
+
+  // ---- pass 1: advance every item's percent ----
+  for (const sl of G.slots){
+    if (!sl.dragon) continue;
+    sl.prevS = sl.s;
+    sl.prevTravel = sl.travel || 0;
+    sl.travel = sl.prevTravel + move;
+    sl.s = (sl.s + move) % total;
+  }
+
+  /* ---- pass 1b: EnforceSpacing 0x526696c, exactly 6.6.5 ----
+     `cko[0]` is the item that boarded last (TryActivateSlot prepends at index
+     0), `cko[Count-1]` is the one nearest the exit, and the loop walks from the
+     back forward: each item pushes the one AHEAD of it forward until the
+     required gap is met, clamped at 1.0.
+         requiredGap = minSpacing + (A.Length + B.Length) * 0.5   [A] = 1.0
+         B.enforced  = min(max(limit, B.raw), 1.0)
+     Boarding order is recoverable from `travel`: more travel means it boarded
+     earlier, so ascending travel is cko order. */
+  const gapWorld = MIN_SPACING + (BASE_ITEM_LENGTH + BASE_ITEM_LENGTH) * 0.5;
+  const gapPx = gapWorld * pxPerWorld;
+  const items = G.slots.filter(sl => sl.dragon).sort((a, b) => (a.travel || 0) - (b.travel || 0));
+  for (let k = 0; k < items.length - 1; k++){
+    const A = items[k], B = items[k + 1];          // B rides ahead of A
+    const limit = A.travel + gapPx;
+    if (B.travel < limit){
+      const d = Math.min(limit, lapLen) - B.travel;
+      if (d > 0){ B.travel += d; B.s = (B.s + d) % total; }
+    }
+  }
+
+  // ---- pass 2: RefreshGateBuffer, then checkpoints and gates per item ----
+  refreshGateBuffer();
+  G.ejectBuf = G.ejectBuf || [];
+  for (const sl of G.slots){
+    if (!sl.dragon) continue;
+    const from = sl.prevS, to = sl.prevS + (sl.travel - sl.prevTravel);
+    checkCheckpoints(from, to, total);
+    for (const d of G.gateBuf){
+      const gate = d.pct * total;
+      if (!(from <= gate && to >= gate) && !(to >= total && gate <= to - total)) continue;
+      if (sl.dragon.mat === d.mat){
+        d.health--;                    // NotifyItemPassed: the wall takes a hit
+      } else {
+        /* ConveyorDoorFeature.EvaluateEject / ShouldEject (0x506bb14 /
+           0x5070a08): a carriage whose shooter does not match the door's
+           material goes into the conveyor's eject buffer, and ProcessEjects
+           throws it off the belt - its remaining ammo is lost. */
+        if (G.ejectBuf.indexOf(sl) < 0) G.ejectBuf.push(sl);
+        break;
+      }
+    }
+  }
+  processEjects();
+
+  // ---- pass 3: the path end ----
+  for (const sl of G.slots){
+    if (!sl.dragon) continue;
+    if (sl.travel < lapLen) continue;
+    sl.travel = 0;
+    if (G.autoFin) continue;           // cks == true: the item keeps riding
+    const dragon = sl.dragon;
+    sl.dragon = null;                     // Remove + ConveyorItemSlot.Return
+    sl.returnUntil = now + RETURN_MS;
+    G.conveyorExits = (G.conveyorExits || 0) + 1;
+    exitToWaiting(dragon, pathPoint(L.path, sl.s));      // HandleConveyorExit
+    tryActivateAutoFinisher();
+  }
+
+  /* ---- SlotEntranceQueueController.Update: the pads just wait ----
+     TryDrainToSlots (0x52bc8a0) is NOT driven from Update - its only callers are
+     OnSlotBlockerRemoved and OnSlotReleasedAfterFull, and it early-returns while
+     the timed-out flags (+0x78 / +0x79) are set. Update itself only starts the
+     hop for a new entry and, for one already landed, counts dt into +0x24 until
+     gracePeriod (0.15 s) elapses and OnShooterEntranceTimedOut fires.
+     So a shooter that came off the belt SITS on its pad; sending it out again is
+     a tap like any other placement. Polling this every frame is what made it
+     re-board the instant its own carriage came back - it looked like it never
+     left the belt. */
+  for (const e of G.entrance){
+    if (now - e.t0 >= JUMP_MS) e.waited = (e.waited || 0) + dt;   // +0x24
+  }
+
+  // ---- TickShooter: rate driven, up to MAX_SHOTS_PER_TICK caught up ----
+  const superMul = 1;
+  const period = 1000 / SHOTS_PER_SEC;
+  for (const slot of G.slots){
+    const dragon = slot.dragon;
+    if (!dragon) continue;
+    if (dragon.ammo <= 0){ dragon.done = true; continue; }
+    if (boarding(slot)){ slot.idle = true; continue; }   // still hopping aboard
+    // its colour is gone: the ~8% ammo surplus the real levels reserve for
+    // obstacle features has nothing to hit here, so it is finished too
+    if (!(G.alivePerMat.get(dragon.mat) > 0)){ dragon.done = true; continue; }
+
+    /* TickShooter's own budget (0x4ecd1ec..0x4ecd23c):
+         sps    = max(FinalShotsPerSecond, 0.001)      // .rodata 0x1d60b94
+         n      = ceil((dt + 1e-4) * sps)              // fcvtps, .rodata 0x1d5fd04
+         budget = clamp(n + 1, 1, 16)                  // add/cmp #0x10/csinc x2
+       so a frame gets a whole number of shots up front, capped at 16. */
+    const budget = Math.max(1, Math.min(MAX_SHOTS_PER_TICK,
+      Math.ceil((dt + 1e-4) * Math.max(0.001, SHOTS_PER_SEC * superMul)) + 1));
+    if (slot.nextFire < now - period * budget) slot.nextFire = now - period * budget;
+
+    let fired = 0;
+    while (fired < budget && slot.nextFire <= now && dragon.ammo > 0){
+      const t = pickTarget(G, slot);
+      if (t < 0) break;
+      G.pixels[t].inflight++;         // CheckShooterTargetIsReserved
+      dragon.ammo--; G.fired++;
+      G.shots.push({ mat: dragon.mat, slot: slot, target: t, t: now + fired * 22 });
+      slot.nextFire += period;        // SetNextFire
+      fired++;
+    }
+    slot.idle = fired === 0;
+    if (slot.idle && slot.nextFire < now) slot.nextFire = now;
+
+    /* ShootersOffenseController.ProcessDepletions (0x4ecd4d4) runs every frame:
+       for each shooter it collected as depleted it raises OnShooterAmmoDepleted
+       (+0x100), and MapController.HandleShooterAmmoDepleted (0x5294d38) is two
+       instructions - `mov w2, wzr; b MakeShooterDisappear` (0x528dfdc) ->
+       MapLogic.RemoveShooter (0x528b594). An empty shooter leaves the belt AT
+       ONCE, wherever it is. */
+    if (dragon.ammo <= 0){
+      const at = pathPoint(L.path, slot.s);
+      slot.dragon = null; slot.travel = 0; G.depleted++;
+      slot.returnUntil = now + RETURN_MS;
+      leaveOutward(dragon, at[0], at[1]);    // mine: fly out, not in
+      tryActivateAutoFinisher();          // rechecked on every disappearance
+    }
+  }
+
+  for (let k = G.shots.length - 1; k >= 0; k--){
+    if (now - G.shots[k].t >= FLIGHT_MS){
+      killPixel(G, G.shots[k].target);
+      G.shots.splice(k, 1);
+    }
+  }
+
+  /* ConveyorDoorFeatureController.Evaluate (0x507432c) + HasAmmoSupply
+     (0x5074260): if no shooter anywhere still carries that door's material with
+     ammo left, the door ForceOpens (0x506e9b0) whatever its health. */
+  for (const d of G.doors){
+    if (d.health <= 0) continue;
+    let supply = false;
+    for (const q of G.queues) for (const sh of q){
+      if (sh.mat === d.mat && sh.ammo > 0){ supply = true; break; }
+      if (sh.pipe) for (const in2 of sh.pipe)
+        if (in2.mat === d.mat && in2.ammo > 0){ supply = true; break; }
+    }
+    if (!supply) for (const e of G.entrance) if (e.dragon.mat === d.mat && e.dragon.ammo > 0) supply = true;
+    if (!supply) for (const sl of G.slots) if (sl.dragon && sl.dragon.mat === d.mat && sl.dragon.ammo > 0) supply = true;
+    if (!supply) d.health = 0;           // ForceOpen
+  }
+
+  tickFeatures(G, G.fired - shots0, G.exits - exits0, G.depleted - dep0);
+
+  // ---- win / fail, both on their measured delays ----
+  if (G.remaining === 0){
+    if (!G.winAt) G.winAt = now + WIN_DELAY_MS;      // checkCompleteDelay
+    else if (now >= G.winAt) finish('win');
+    return;
+  }
+  G.winAt = 0;
+
+  if (G.failAt){                                     // instantFailDelay
+    if (now >= G.failAt) finish('fail', G.failWhy);
+    return;
+  }
+
+  const inQueues = G.queues.reduce((a, q) => a + q.length, 0);
+  const onBelt = G.slots.filter(s => s.dragon).length;
+  if (!inQueues && !onBelt && !G.entrance.length && !G.shots.length){
+    pendFail('슈터 소진 — Out of Shoots'); return;
+  }
+
+  // nothing on the board can ever hit anything again and nothing new can board
+  if (!G.shots.length && !anyoneUseful()){
+    if (!G.stallSince) G.stallSince = now;
+    else if (now - G.stallSince > 900){
+      const freed = RELIEF ? relieveGate() : null;
+      if (freed){ bump('게이트 해제: ' + freed); G.stallSince = 0; }
+      else pendFail(slotsFullReason());
+    }
+  } else G.stallSince = 0;
+}
+
+/* Open one shut gate, cheapest first. Returns what was opened, or null. */
+function relieveGate(){
+  // Only worth opening a gate if the shooter behind it could actually shoot;
+  // a board that is dead from colour occlusion is a genuine Out of Space and
+  // must not burn the level's gates on the way to reporting it.
+  const helps = sh => canEverShoot(G, sh.mat);
+
+  // same eligibility as IsAvailableToUnlock: head of its queue only
+  let pick = null;
+  for (let qi = 0; qi < G.queues.length && !pick; qi++){
+    const head = G.queues[qi][0];
+    if (head && head.locked && helps(head)) pick = head;
+  }
+  if (pick){ pick.locked = false; return '자물쇠'; }
+
+  let best = null;
+  for (const sh of G.byId.values())
+    if (sh.ice > 0 && helps(sh) && (!best || sh.ice < best.ice)) best = sh;
+  if (best){ best.ice = 0; return '얼음'; }
+
+  best = null;
+  for (const sh of G.byId.values())
+    if (sh.totem > 0 && helps(sh) && (!best || sh.totem < best.totem)) best = sh;
+  if (best){ best.totem = 0; return '토템'; }
+
+  for (const ch of G.chains){
+    if (ch.broken) continue;
+    for (const id of ch.ids){
+      const sh = G.byId.get(id);
+      if (sh && helps(sh)){ ch.broken = true; return '족쇄'; }
+    }
+  }
+
+  best = null;
+  for (const d of G.doors)
+    if (d.health > 0 && (!best || d.health < best.health)) best = d;
+  if (best){ best.health = 0; return '컨베이어 문'; }
+
+  for (const c of G.cages) if (!c.open){ c.open = true; return '슬롯 케이지'; }
+  return null;
+}
+
+/* Can the board still change?
+
+   A carriage only frees when its shooter empties, so a shooter waiting in a
+   queue or on an entrance pad is worthless unless some carriage can still
+   shoot, or a carriage is free right now. With occlusion on, a shooter whose
+   colour is buried is idle but not dead - another carriage peeling the blocker
+   in front of it revives it. Nothing shooting and nothing able to board is the
+   real dead end, and it is exactly TriggerOutOfSpaceFail. */
+/* CanShootAnyTargetNew (0x52a2604): a whole-board query. It takes
+   GetNotDisabledShooters when NormallyTappableFirstShooterExists (0x52a2930),
+   else the narrower GetShootersOutsideOfQueue, then returns true on the first
+   shooter whose CanShoot succeeds. */
+function canShootAnyTarget(){
+  const tappableHead = G.queues.some(q => q.length && !tapBlock(G, q[0]));
+  for (const s of G.slots) if (s.dragon && canEverShoot(G, s.dragon.mat)) return true;
+  for (const e of G.entrance) if (canEverShoot(G, e.dragon.mat)) return true;
+  if (!tappableHead) return false;               // queue-only population
+  for (const q of G.queues)
+    if (q.length && !tapBlock(G, q[0]) && canEverShoot(G, q[0].mat)) return true;
+  return false;
+}
+
+function anyoneUseful(){
+  /* "Can anything still happen, ever?" - the stall detector, so it must not
+     confuse "not right now" with "never". Carriage capacity is deliberately
+     NOT part of it: carriages recycle at the path end, so a momentary shortage
+     is not a dead board. Weighing capacity here killed level 2300 while four
+     unblocked queue heads still had reachable targets (audit F7). Capacity
+     belongs to the tap gate (CanReceiveItemCount) and nowhere else. */
+  for (const s of G.slots) if (s.dragon && canEverShoot(G, s.dragon.mat)) return true;
+  for (const e of G.entrance) if (canEverShoot(G, e.dragon.mat)) return true;
+
+  // every queue head gated by a feature with no release path: that IS dead, and
+  // 6.7 will name it (LockedOut / Frozen / BullTotem)
+  if (!G.queues.some(q => q.length && !tapBlock(G, q[0]))) return false;
+
+  for (const q of G.queues) for (const sh of q){
+    if (canEverShoot(G, sh.mat)) return true;          // it will reach the head
+    if (sh.pipe) for (const i2 of sh.pipe) if (canEverShoot(G, i2.mat)) return true;
+  }
+  return false;
+}
+
+function finish(kind, reason){
+  G.state = kind; G.failReason = reason || '';
+  /* Meta bookkeeping. A fail costing one heart is how the genre works, but the
+     original's heart cost, refill timer and gold reward are server side and
+     absent from the APK [X] - these numbers are placeholders. */
+  if (kind === 'win'){
+    cleared.add(G.n);
+    META.current = Math.max(META.current, Math.min(LV_MAX, G.n + 1));
+    META.gold += 40 + 10 * dif(G.raw.Difficulty).pips;   // harder pays more
+  } else {
+    spendHeart();
+  }
+  saveMeta();
+  $('title').textContent = kind === 'win' ? '클리어!' : '실패!';
+  $('sub').textContent = kind === 'win'
+    ? '레벨 ' + G.n + ' · ' + G.fired + '발 · ' + ((performance.now() - G.t0) / 1000).toFixed(1) + '초'
+    : reason;
+  $('act').textContent = kind === 'win' ? '다음 레벨' : '다시 시도';
+  const target = kind === 'win' ? G.n + 1 : G.n;
+  $('act').onclick = () => load(target);
+  $('overlay').classList.add('on');
+}
+
+/* ================================ layout ================================ */
+
+function layout(){
+  const dpr = Math.min(2, window.devicePixelRatio || 1);
+  const w = cv.clientWidth, h = cv.clientHeight;
+  cv.width = Math.max(1, Math.round(w * dpr));
+  cv.height = Math.max(1, Math.round(h * dpr));
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  if (!G){ L = null; return; }
+
+  const pigH = 24, gapH = 4, pad = 8, belt = 32;
+  const qRows  = Math.min(QUEUE_ROWS, Math.max.apply(null, G.queues.map(q => q.length).concat([1])));
+  const queueH = qRows * (pigH + gapH) + 16;
+
+  const entH = 30, puH = 30;
+  const boardH = Math.max(120, h - queueH - entH - puH - pad * 2 - 12);
+  const innerW = w - pad * 2 - belt * 2 - 10, innerH = boardH - belt * 2 - 10;
+  const cell = Math.max(2, Math.min(innerW / G.W, innerH / G.H));
+  const gw = cell * G.W, gh = cell * G.H;
+  const gx = w / 2 - gw / 2, gy = pad + boardH / 2 - gh / 2;
+
+  const m = Math.max(belt * 0.85, 22);
+  const path = buildPath(gx - m, gy - m, gx + gw + m, gy + gh + m, Math.min(28, m));
+  const prevTotal = L && L.path ? L.path.total : 0;
+
+  L = {
+    w: w, h: h, cell: cell, gx: gx, gy: gy, gw: gw, gh: gh,
+    path: path, belt: belt,
+    entryS: pathSeam(path),
+    entY: pad + boardH + 4, entH: entH,
+    puY: pad + boardH + 4 + entH + 4, puH: puH,
+    queueY: pad + boardH + 4 + entH + 4 + puH + 4,
+    queueH: queueH, pigH: pigH, gapH: gapH, qRows: qRows
+  };
+
+  // carriages sit evenly around the loop; keep relative spacing across resizes
+  if (!G.slots.length){
+    for (let i = 0; i < G.slotCount; i++)
+      G.slots.push({ s: path.total * i / G.slotCount, dragon: null, nextFire: 0,
+                     idle: true, lap: 0 });
+  } else if (prevTotal && prevTotal !== path.total){
+    const k = path.total / prevTotal;
+    for (const s of G.slots) s.s = (s.s * k) % path.total;
+  }
+}
+
+function puRect(i){
+  const n = POWERUPS.length;
+  const totalW = Math.min(L.w - 16, n * 52);
+  const cw = totalW / n;
+  return [(L.w - totalW) / 2 + i * cw + 2, L.puY + 2, cw - 4, L.puH - 4];
+}
+
+// the slot-entrance queue: ENTRANCE_CAP pads between the belt and the queues
+function entRect(i){
+  const n = Math.max(5, G.entrance.length);
+  const totalW = Math.min(L.w - 20, n * 40);
+  const cw = totalW / n;
+  return [(L.w - totalW) / 2 + i * cw + 3, L.entY + 2, cw - 6, L.entH - 4];
+}
+
+function queueRect(qi, row){
+  const n = G.queues.length, pad = 10;
+  const cw = (L.w - pad * 2) / n, x = pad + qi * cw;
+  const bw = Math.min(cw - 8, 44);
+  return [x + (cw - bw) / 2, L.queueY + row * (L.pigH + L.gapH), bw, L.pigH];
+}
+
+/* ================================ render ================================ */
+
+function rr(x, y, w, h, r){
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r);
+  ctx.arcTo(x, y, x + w, y, r);
+  ctx.closePath();
+}
+
+function badge(img, x, y, size){
+  if (!ready(img)) return false;
+  const iw = img.naturalWidth || img.width, ih = img.naturalHeight || img.height;
+  const k = size / Math.max(iw, ih);
+  ctx.drawImage(img, x, y, iw * k, ih * k);
+  return true;
+}
+
+/* Idle blink. The original has a blink pose (pig_blink) but the schedule is in
+   an AnimatorController we do not read, so the 3.4 s cycle is ours [?]. */
+function blinking(sh){
+  if (sh._ph == null){
+    let hv = 0, t = String(sh.id);
+    for (let i = 0; i < t.length; i++) hv = (hv * 131 + t.charCodeAt(i) * 617) % 3400;
+    sh._ph = hv;
+  }
+  return ((nowMs() + sh._ph) % 3400) < 140;
+}
+
+function drawDragon(x, y, w, h, sh, opts){
+  opts = opts || {};
+  const known = !sh.surprise || sh.revealed;
+  const gated = G && tapBlock(G, sh);
+  const spr = known ? tintedDragon(sh.mat, blinking(sh)) : null;
+
+  if (spr){
+    rr(x, y, w, h, 6);
+    ctx.fillStyle = colorOf(sh.mat); ctx.globalAlpha = 0.34;
+    ctx.fill(); ctx.globalAlpha = 1;
+    const k = Math.min(w / spr.width, h / spr.height) * 1.18;
+    const dw = spr.width * k, dh = spr.height * k;
+    ctx.save();
+    if (gated) ctx.globalAlpha = 0.45;
+    ctx.drawImage(spr, x + (w - dw) / 2, y + (h - dh) / 2 - 1, dw, dh);
+    ctx.restore();
+  } else {
+    rr(x, y, w, h, 6);
+    ctx.fillStyle = known ? colorOf(sh.mat) : '#5b4c70';
+    ctx.fill();
+  }
+  ctx.lineWidth = opts.hi ? 2 : 1;
+  ctx.strokeStyle = opts.hi ? '#ffffff' : 'rgba(0,0,0,.35)';
+  rr(x, y, w, h, 6); ctx.stroke();
+
+  // ammo, on a dark plate so it reads over the sprite
+  const label = known ? String(sh.ammo) : '?';
+  ctx.font = '700 ' + Math.min(12, Math.round(h * 0.46)) + 'px Segoe UI,system-ui,sans-serif';
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  const tw = ctx.measureText(label).width + 8;
+  rr(x + w / 2 - tw / 2, y + h - 11, tw, 11, 5);
+  ctx.fillStyle = 'rgba(12,8,16,.72)'; ctx.fill();
+  ctx.fillStyle = '#fff';
+  ctx.fillText(label, x + w / 2, y + h - 5.5);
+
+  // feature badges
+  const bs = Math.max(9, h * 0.42);
+  if (sh.locked) badge(ART.lock, x - 1, y - 2, bs);
+  else if (sh.ice > 0) badge(sh.ice > 1 ? ART.iceClock : ART.ice, x - 1, y - 2, bs);
+  else if (sh.chain && !sh.chain.broken) badge(ART.fChain, x - 2, y - 1, bs);
+  else if (sh.totem > 0) badge(ART.fTotem, x - 1, y - 2, bs);
+  else if (sh.pipe && sh.pipe.length) badge(ART.fPipe, x - 2, y - 1, bs);
+  else if (sh.mallet != null) badge(ART.music, x - 1, y - 2, bs * 0.8);
+  else if (sh.hammer) badge(ART.hammer, x - 1, y - 2, bs * 0.8);
+  else if (sh.astro) badge(ART.fAstro, x - 1, y - 2, bs * 0.8);
+  else if (!known) badge(ART.question, x - 1, y - 2, bs * 0.8);
+
+  // counters that matter
+  ctx.font = '700 9px Segoe UI';
+  ctx.fillStyle = '#ffd9e2';
+  if (sh.ice > 0) ctx.fillText(String(sh.ice), x + w - 7, y + 6);
+  else if (sh.totem > 0) ctx.fillText(String(sh.totem), x + w - 7, y + 6);
+  else if (sh.pipe && sh.pipe.length) ctx.fillText(String(sh.pipe.length), x + w - 7, y + 6);
+
+  if (opts.roped){
+    ctx.beginPath(); ctx.arc(x + w - 5, y + h - 14, 2.4, 0, 6.2832);
+    ctx.fillStyle = 'rgba(255,255,255,.9)'; ctx.fill();
+  }
+}
+
+function render(now){
+  ctx.clearRect(0, 0, L.w, L.h);
+  const P = L.path, gx = L.gx, gy = L.gy, cell = L.cell;
+
+  // ---- conveyor lane ----
+  ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.moveTo(P.pts[0][0], P.pts[0][1]);
+  for (let i = 1; i < P.pts.length; i++) ctx.lineTo(P.pts[i][0], P.pts[i][1]);
+  ctx.closePath();
+  ctx.lineWidth = L.belt; ctx.strokeStyle = '#221b2d'; ctx.stroke();
+  ctx.lineWidth = L.belt - 6; ctx.strokeStyle = 'rgba(255,255,255,.05)'; ctx.stroke();
+  ctx.lineWidth = 2; ctx.strokeStyle = 'rgba(255,255,255,.13)';
+  const phase = (now / 1000 * BELT_SPEED_WORLD * 60) % 18;
+  for (let s = phase; s < P.total; s += 18){
+    const a = pathPoint(P, s), b = pathPoint(P, s + 6);
+    ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.stroke();
+  }
+
+  // ---- picture ----
+  ctx.fillStyle = 'rgba(255,255,255,.03)';
+  ctx.fillRect(gx - 2, gy - 2, L.gw + 4, L.gh + 4);
+  for (const p of G.pixels){
+    if (!p.alive) continue;
+    ctx.fillStyle = colorOf(p.mat);
+    for (const c of p.cells)
+      ctx.fillRect(gx + c[0] * cell, gy + (G.H - 1 - c[1]) * cell, cell + 0.6, cell + 0.6);
+  }
+
+  // ---- conveyor doors (ConveyorDoorFeature) ----
+  for (const d of G.doors){
+    if (d.health <= 0) continue;
+    const a = pathPoint(P, d.pct * P.total);
+    const b = pathPoint(P, d.pct * P.total + 6);
+    const ang = Math.atan2(b[1] - a[1], b[0] - a[0]) + Math.PI / 2;
+    ctx.save();
+    ctx.translate(a[0], a[1]); ctx.rotate(ang);
+    rr(-L.belt / 2, -5, L.belt, 10, 3);
+    ctx.fillStyle = colorOf(d.mat); ctx.fill();
+    ctx.strokeStyle = 'rgba(0,0,0,.5)'; ctx.lineWidth = 1.5; ctx.stroke();
+    ctx.fillStyle = 'rgba(12,8,16,.8)';
+    ctx.font = '700 9px Segoe UI'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(String(d.health), 0, 0.5);
+    ctx.restore();
+  }
+
+  // ---- carriages ----
+  for (let si = 0; si < G.slots.length; si++){
+    const slot = G.slots[si];
+    const p = pathPoint(P, slot.s);
+    const caged = slotBlocked(G, si);
+    if (!slot.dragon && !caged) continue;   // off the belt
+    rr(p[0] - 15, p[1] - 12, 30, 24, 7);
+    ctx.fillStyle = caged ? '#3a2430' : '#2c2338'; ctx.fill();
+    ctx.strokeStyle = caged ? 'rgba(239,90,111,.7)'
+      : slot.dragon ? 'rgba(255,255,255,.18)' : 'rgba(255,255,255,.40)';
+    ctx.lineWidth = 1; ctx.stroke();
+    if (caged){
+      const c = G.cages.find(c => c.slot === si && !c.open);
+      badge(ART.fSlotCage, p[0] - 11, p[1] - 10, 20);
+      ctx.fillStyle = colorOf(c.mat);
+      ctx.font = '700 9px Segoe UI'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText((c.need - c.got) + '', p[0] + 9, p[1] + 8);
+    }
+    if (!slot.dragon) continue;
+    // the line it is aiming down (the aligned one it actually picked, if any)
+    if (COLUMN_SCAN){
+      const g = slotScan(slot);
+      const at = (!slot.idle && slot.aim != null) ? slot.aim + 0.5 : g.at;
+      const side = g.line(Math.floor(at));
+      if (side){
+        ctx.strokeStyle = slot.idle ? 'rgba(255,255,255,.07)' : 'rgba(255,255,255,.30)';
+        ctx.lineWidth = Math.max(1, cell * 0.7);
+        ctx.beginPath();
+        if (g.axis === 'col'){
+          const x = gx + at * cell;
+          ctx.moveTo(x, p[1]);
+          ctx.lineTo(x, side.dy > 0 ? gy : gy + L.gh);
+        } else {
+          const y = gy + at * cell;
+          ctx.moveTo(p[0], y);
+          ctx.lineTo(side.dx > 0 ? gx + L.gw : gx, y);
+        }
+        ctx.stroke();
+        ctx.lineWidth = 1;
+      }
+    }
+    /* Prepare / PrepareImmediate (6.3): the shooter is already ON the carriage
+       as far as the rules go, the sprite just has not caught up yet. */
+    if (boarding(slot) && slot.boardFrom){
+      const k = (now - slot.boardT0) / JUMP_MS;
+      const x = slot.boardFrom[0] + (p[0] - slot.boardFrom[0]) * k;
+      const y = slot.boardFrom[1] + (p[1] - slot.boardFrom[1]) * k - Math.sin(k * Math.PI) * 22;
+      ctx.globalAlpha = 0.92;
+      drawDragon(x - 13, y - 10, 26, 20, slot.dragon, { roped: G.group.has(slot.dragon.id) });
+      ctx.globalAlpha = 1;
+      continue;
+    }
+    drawDragon(p[0] - 13, p[1] - 10, 26, 20, slot.dragon, { roped: G.group.has(slot.dragon.id) });
+  }
+
+  // ---- projectiles ----
+  for (const sh of G.shots){
+    const k = Math.max(0, Math.min(1, (now - sh.t) / FLIGHT_MS));
+    const from = pathPoint(P, sh.slot.s);
+    const c0 = G.pixels[sh.target].cells[0];
+    const tx = gx + (c0[0] + .5) * cell, ty = gy + (G.H - 1 - c0[1] + .5) * cell;
+    const x = from[0] + (tx - from[0]) * k, y = from[1] + (ty - from[1]) * k;
+    ctx.beginPath(); ctx.arc(x, y, Math.max(2.5, cell * .34), 0, 6.2832);
+    ctx.fillStyle = colorOf(sh.mat); ctx.fill();
+    ctx.strokeStyle = 'rgba(0,0,0,.35)'; ctx.lineWidth = 1; ctx.stroke();
+  }
+
+  // ---- spent shooters flying off the belt ----
+  if (G.leaving) for (let i = G.leaving.length - 1; i >= 0; i--){
+    const e = G.leaving[i], k = (now - e.t0) / LEAVE_MS;
+    if (k >= 1 || k < 0){ G.leaving.splice(i, 1); continue; }
+    ctx.save();
+    ctx.globalAlpha = 1 - k * k;
+    ctx.translate(e.x + e.vx * k, e.y + e.vy * k);
+    ctx.rotate(e.spin * k * 1.1);
+    const sc = 1 - k * 0.3;
+    ctx.scale(sc, sc);
+    drawDragon(-13, -10, 26, 20, e.dragon, {});
+    ctx.restore();
+  }
+
+  // ---- slot-entrance queue ----
+  for (let i = 0; i < Math.max(5, G.entrance.length); i++){
+    const r = entRect(i);
+    rr(r[0], r[1], r[2], r[3], 6);
+    ctx.fillStyle = 'rgba(255,255,255,.04)'; ctx.fill();
+    ctx.strokeStyle = canReceiveItemCount(G) === 0
+      ? 'rgba(239,90,111,.55)' : 'rgba(255,255,255,.14)';
+    ctx.lineWidth = 1; ctx.stroke();
+  }
+  for (let i = 0; i < G.entrance.length; i++){
+    const e = G.entrance[i], r = entRect(i);
+    const to = [r[0] + r[2] / 2, r[1] + r[3] / 2];
+    const k = Math.max(0, Math.min(1, (now - e.t0) / JUMP_MS));
+    const from = e.from || to;
+    const x = from[0] + (to[0] - from[0]) * k;
+    const y = from[1] + (to[1] - from[1]) * k - Math.sin(k * Math.PI) * 22;
+    if (k < 1){
+      ctx.globalAlpha = 0.9;
+      drawDragon(x - 12, y - 9, 24, 18, e.dragon, { roped: G.group.has(e.dragon.id) });
+      ctx.globalAlpha = 1;
+    } else {
+      drawDragon(to[0] - 13, to[1] - 9, 26, 18, e.dragon, { roped: G.group.has(e.dragon.id) });
+    }
+  }
+
+  // ---- queues, with ropes between connected shooters ----
+  const seen = new Map();
+  for (let qi = 0; qi < G.queues.length; qi++)
+    for (let row = 0; row < Math.min(L.qRows, G.queues[qi].length); row++){
+      const r = queueRect(qi, row);
+      seen.set(G.queues[qi][row].id, [r[0] + r[2] / 2, r[1] + r[3] / 2]);
+    }
+  ctx.strokeStyle = 'rgba(255,255,255,.3)'; ctx.lineWidth = 1.5;
+  const drawn = new Set();
+  for (const ids of G.group.values()){
+    if (drawn.has(ids)) continue; drawn.add(ids);
+    const pts = ids.map(i => seen.get(i)).filter(Boolean);
+    if (pts.length < 2) continue;
+    ctx.beginPath(); ctx.moveTo(pts[0][0], pts[0][1]);
+    for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i][0], pts[i][1]);
+    ctx.stroke();
+  }
+  for (let qi = 0; qi < G.queues.length; qi++){
+    const q = G.queues[qi];
+    for (let row = 0; row < Math.min(L.qRows, q.length); row++){
+      const r = queueRect(qi, row), sh = q[row];
+      sh.surprise = G.surprise.has(sh.id);
+      drawDragon(r[0], r[1], r[2], r[3], sh, {
+        hi: row === 0 && G.state === 'play', roped: G.group.has(sh.id)
+      });
+    }
+    if (q.length > L.qRows){
+      const r = queueRect(qi, L.qRows - 1);
+      ctx.fillStyle = '#a495b8'; ctx.font = '600 10px Segoe UI'; ctx.textAlign = 'center';
+      ctx.fillText('+' + (q.length - L.qRows), r[0] + r[2] / 2, r[1] + L.pigH + 11);
+    }
+  }
+
+  // ---- powerups ----
+  for (let i = 0; i < POWERUPS.length; i++){
+    const pu = POWERUPS[i], r = puRect(i);
+    rr(r[0], r[1], r[2], r[3], 8);
+    ctx.fillStyle = G.pw[pu.key] > 0 ? '#332843' : '#231d2e'; ctx.fill();
+    ctx.strokeStyle = G.armed === pu.key ? '#ffd23f' : 'rgba(255,255,255,.14)';
+    ctx.lineWidth = G.armed === pu.key ? 2 : 1; ctx.stroke();
+    ctx.save();
+    if (!G.pw[pu.key]) ctx.globalAlpha = 0.35;
+    const artKey = pu.key !== 'tray' ? pu.art
+      : G.tray ? 'trayFull' : G.armed === 'tray' ? 'trayHalf' : 'tray';
+    if (!badge(ART[artKey], r[0] + 4, r[1] + 3, r[3] - 6)){
+      ctx.fillStyle = '#a495b8'; ctx.font = '700 9px Segoe UI';
+      ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+      ctx.fillText(pu.label, r[0] + 5, r[1] + r[3] / 2);
+    }
+    ctx.restore();
+    ctx.fillStyle = '#efe9f5'; ctx.font = '700 10px Segoe UI';
+    ctx.textAlign = 'right'; ctx.textBaseline = 'alphabetic';
+    ctx.fillText('x' + G.pw[pu.key], r[0] + r[2] - 4, r[1] + r[3] - 4);
+  }
+
+  if (bumpMsg && now - bumpAt < 1000){
+    ctx.globalAlpha = 1 - (now - bumpAt) / 1000;
+    ctx.fillStyle = '#ef5a6f'; ctx.font = '700 13px Segoe UI'; ctx.textAlign = 'center';
+    ctx.fillText(bumpMsg, L.w / 2, L.entY - 3);
+    ctx.globalAlpha = 1;
+  }
+}
+
+function frame(now){
+  requestAnimationFrame(frame);
+  if (!G || inHome) return;
+  if (!L) layout();
+  const dt = Math.min(0.05, lastNow ? (now - lastNow) / 1000 : 0.016);
+  lastNow = now;
+  step(now, dt);
+  render(now);
+  const tot = G.pixels.length;
+  $('meta').textContent = G.raw.Difficulty + ' · ' + G.W + '×' + G.H
+    + ' · 픽셀 ' + (tot - G.remaining) + '/' + tot
+    + ' · 큐 ' + G.queues.reduce((a, q) => a + q.length, 0)
+    + ' · 진입 ' + G.entrance.length
+    + (G.tray ? ' · 트레이 1' : '')
+
+    + ' · 슬롯 ' + G.slots.filter(s => s.dragon).length + '/' + G.slotCount;
+}
+
+/* ================================ input ================================ */
+
+cv.addEventListener('pointerdown', e => {
+  if (!G || !L || G.state !== 'play') return;
+  const r = cv.getBoundingClientRect();
+  const mx = e.clientX - r.left, my = e.clientY - r.top;
+
+  // powerup bar
+  if (my >= L.puY && my <= L.puY + L.puH){
+    for (let i = 0; i < POWERUPS.length; i++){
+      const q = puRect(i);
+      if (mx >= q[0] && mx <= q[0] + q[2]){ usePowerup(POWERUPS[i].key); return; }
+    }
+    return;
+  }
+
+  /* SuperShooterPowerupController: SetupSuperShooter / superShooterAppearPoint
+     / superShooterShootPoint / OnSelectionFinished(1) / IsPixelViableToShoot -
+     one special shooter appears and the player aims it at a pixel. It is not a
+     timed buff on the belt. Shape [V], extent of the shot [?]: here it takes
+     the tapped pixel's connected same-colour cluster. */
+  if (G.armed === 'super' && mx >= L.gx && mx <= L.gx + L.gw
+      && my >= L.gy && my <= L.gy + L.gh){
+    const cx = Math.floor((mx - L.gx) / L.cell);
+    const cy = G.H - 1 - Math.floor((my - L.gy) / L.cell);
+    const o0 = (cx >= 0 && cy >= 0 && cx < G.W && cy < G.H) ? G.owner[cy * G.W + cx] : -1;
+    if (o0 < 0 || !G.pixels[o0].alive){ bump('픽셀을 탭해라'); return; }
+    const mat = G.pixels[o0].mat, seen = new Set([o0]), stack = [o0];
+    let hit = 0;
+    while (stack.length){
+      const idx = stack.pop();
+      const px = G.pixels[idx];
+      if (!px.alive) continue;
+      killPixel(G, idx); hit++;
+      for (const c of px.cells)
+        for (const d of [[1,0],[-1,0],[0,1],[0,-1]]){
+          const nx = c[0] + d[0], ny = c[1] + d[1];
+          if (nx < 0 || ny < 0 || nx >= G.W || ny >= G.H) continue;
+          const o = G.owner[ny * G.W + nx];
+          if (o >= 0 && !seen.has(o) && G.pixels[o].alive && G.pixels[o].mat === mat){
+            seen.add(o); stack.push(o);
+          }
+        }
+    }
+    G.armed = null; G.pw.super--;
+    bump('슈퍼 슈터 ' + hit + '칸 관통');
+    return;
+  }
+
+  // DemolishPowerupController: armed, the next tap on the picture blasts an area
+  if (G.armed === 'demolish' && mx >= L.gx && mx <= L.gx + L.gw
+      && my >= L.gy && my <= L.gy + L.gh){
+    const cx = Math.floor((mx - L.gx) / L.cell);
+    const cy = G.H - 1 - Math.floor((my - L.gy) / L.cell);
+    let hit = 0;
+    for (let x = cx - 2; x <= cx + 2; x++)
+      for (let y = cy - 2; y <= cy + 2; y++){
+        if (x < 0 || y < 0 || x >= G.W || y >= G.H) continue;
+        const o = G.owner[y * G.W + x];
+        if (o >= 0 && G.pixels[o].alive){ killPixel(G, o); hit++; }
+      }
+    G.armed = null; G.pw.demolish--;
+    bump('철거 ' + hit + '칸');
+    return;
+  }
+
+  /* A pad is a tap target too: the shooter parked there is sent out under the
+     same admission rule as any other placement (CanReceiveItemCount). */
+  if (my >= L.entY - 8 && my <= L.entY + L.entH + 8){
+    for (let i = 0; i < G.entrance.length; i++){
+      const r = entRect(i);
+      if (mx < r[0] - 6 || mx > r[0] + r[2] + 6) continue;
+      const fi = freeCarriage();
+      if (fi < 0){ bump('빈 캐리지 없음'); return; }
+      const e = G.entrance.splice(i, 1)[0];
+      boardSlot(G.slots[fi], e.dragon, [r[0] + r[2] / 2, r[1] + r[3] / 2]);
+      return;
+    }
+    bump('대기 줄이 비어 있다');
+    return;
+  }
+
+  if (my < L.queueY - 6) return;
+
+  // HandPowerupController: "Pick any dragon or item in the queue."
+  if (G.armed === 'hand'){
+    for (let qi = 0; qi < G.queues.length; qi++)
+      for (let row = 0; row < Math.min(L.qRows, G.queues[qi].length); row++){
+        const q = queueRect(qi, row);
+        if (mx >= q[0] - 8 && mx <= q[0] + q[2] + 8
+            && my >= q[1] - 2 && my <= q[1] + q[3] + 2){
+          /* CanTapShooterCondition.CheckWithReason (0x5275558) runs
+             CheckPriorityConditions (0x527420c) first, and Hand's
+             PowerupPriorityCanTapShooterCondition.IsPriorityActive (0x5275ff4)
+             returns tappable immediately, skipping CheckMainConditions
+             (0x52742f8) entirely. It is a one-tap bypass of the whole gate
+             chain, NOT a state change - the dragon's lock/ice/totem/chain counters
+             are left alone. */
+          const sh = G.queues[qi][row];
+          G.queues[qi].splice(row, 1);
+          G.queues[qi].unshift(sh);
+          G.handBypass = sh;
+          G.armed = null; G.pw.hand--;
+          tapQueue(qi);
+          G.handBypass = null;
+          bump('손: 게이트 무시하고 1회 탑승');
+          return;
+        }
+      }
+    bump('큐의 드래곤을 골라라'); return;
+  }
+
+  /* IsShooterFirstInQueueCondition (via CanTapShooterCondition, 6.4/6.10):
+     only the HEAD of a queue is tappable. The hit box therefore has to be the
+     head's own cell - testing the column's x range alone made every visible
+     row send the head, which looked like the whole column was selectable. */
+  for (let qi = 0; qi < G.queues.length; qi++){
+    if (!G.queues[qi].length) continue;
+    const r0 = queueRect(qi, 0);
+    if (mx < r0[0] - 12 || mx > r0[0] + r0[2] + 12) continue;
+    if (my > r0[1] + r0[3] + 4){        // a row behind the head
+      bump('맨 앞만 보낼 수 있다');
+      return;
+    }
+    if (G.armed === 'tray'){ useTray(qi); return; }
+    tapQueue(qi); return;
+  }
+});
+
+function usePowerup(key){
+  if (!G.pw[key]){ bump('보유 없음'); return; }
+  if (G.armed === key){ G.armed = null; return; }
+  const pu = POWERUPS.find(p => p.key === key);
+  if (key === 'shuffle'){
+    // ShufflePowerupController: reorder every queue
+    /* MapController.ShuffleQueues (0x528f784) pools every queue but gates each
+       shooter through <ShuffleQueues>g__CanMoveShooter|73_0 (0x528d768), so a
+       gated dragon stays where it is. */
+    const canMove = sh => !tapBlock(G, sh);
+    const fixed = G.queues.map(q => q.map(sh => canMove(sh) ? null : sh));
+    const all = [];
+    for (const q of G.queues) for (const sh of q) if (canMove(sh)) all.push(sh);
+    for (let i = all.length - 1; i > 0; i--){
+      const j = Math.floor(Math.random() * (i + 1));
+      const t = all[i]; all[i] = all[j]; all[j] = t;
+    }
+    let k = 0;
+    for (let qi = 0; qi < G.queues.length; qi++)
+      for (let i = 0; i < G.queues[qi].length; i++)
+        if (!fixed[qi][i]) G.queues[qi][i] = all[k++];
+    G.pw.shuffle--; bump('셔플');
+  } else if (key === 'slot'){
+    // MapLogic.AddConveyorSlot / RVSlotIncreaser
+    const t = L.path.total;
+    G.slotCount++;
+    G.slots.push({ s: (G.slots.length ? G.slots[G.slots.length - 1].s + t / G.slotCount : 0) % t,
+                   dragon: null, nextFire: 0, idle: true });
+    G.pw.slot--; bump('슬롯 +1');
+  } else {
+    G.armed = key; bump(pu.desc);
+  }
+}
+
+// TrayPowerupController: park the queue head aside, tap again to send it back
+function useTray(qi){
+  if (G.tray){
+    G.queues[qi].unshift(G.tray); G.tray = null; G.armed = null;
+    bump('트레이에서 복귀');
+    return;
+  }
+  const q = G.queues[qi];
+  if (!q.length) return;
+  G.tray = q.shift();
+  G.armed = null; G.pw.tray--;
+  bump('트레이에 보관');
+}
+
+/* ================================= boot ================================= */
+
+const count = (st, f) => { let n = 0; for (const sh of st.byId.values()) if (f(sh)) n++; return n; };
+const FEATURE_CHIPS = [
+  ['서프라이즈', st => count(st, sh => sh.surprise)],
+  ['연결', st => st.group.size],
+  ['족쇄', st => st.chains.length],
+  ['자물쇠', st => count(st, sh => sh.locked)],
+  ['얼음', st => count(st, sh => sh.ice > 0)],
+  ['토템', st => count(st, sh => sh.totem > 0)],
+  ['파이프', st => st.pipes],
+  ['말렛', st => count(st, sh => sh.mallet != null)],
+  ['해머', st => count(st, sh => sh.hammer)],
+  ['우주복', st => count(st, sh => sh.astro)],
+  ['슬롯케이지', st => st.cages.length],
+  ['컨베이어 문', st => st.doors.length]
+];
+
+function drawLegend(){
+  const el = $('legend'); el.innerHTML = '';
+  for (const [label, f] of FEATURE_CHIPS){
+    const n = f(G);
+    if (!n) continue;
+    const d = document.createElement('span'); d.className = 'chip';
+    d.style.borderColor = '#7a659b';
+    d.textContent = label + ' ' + n;
+    el.appendChild(d);
+  }
+  for (const m of Array.from(G.alivePerMat.keys()).sort((a, b) => a - b)){
+    const d = document.createElement('span'); d.className = 'chip';
+    d.innerHTML = '<span class="sw" style="background:' + colorOf(m) + '"></span>'
+      + (PALETTE[m] ? PALETTE[m][0] : m);
+    el.appendChild(d);
+  }
+}
+
+async function load(n){
+  n = Math.max(1, Math.min(PACK.length, n | 0));
+  $('lvl').value = n;
+  $('overlay').classList.remove('on');
+  clock = 0; lastNow = 0;          // the shared sim clock restarts with the level
+  bumpMsg = ''; bumpAt = 0;        // a stale toast would stick: clock went backwards
+  try { G = buildState(n, await fetchLevel(n)); }
+  catch (err){ G = null; L = null; $('meta').textContent = '레벨 로드 실패: ' + err.message; return; }
+  drawLegend();
+  L = null;
+  layout();
+}
+
+/* ============================== home ==============================
+   Lobby, level card, shop and sprite sheet. No image files: the hexagons are
+   clip-path, the plates are gradients, the icons are the canvases above turned
+   into data URLs.
+
+   The level DATA on the card is real - `Difficulty` and the feature arrays come
+   out of the level JSONs via reverse/tools/make_manifest.py. The economy does
+   not exist in the original (server side), so hearts, gold and prices here are
+   mine and deliberately simple: a fail costs a heart, a clear pays gold by
+   difficulty, gold buys powerups. */
+const NODE_H = 112, LV_MAX = PACK_MAN.length;
+const DIFFS = {
+  'Easy':      { ko: '쉬움',       pips: 1, c1: '#5cb8ff', c2: '#1e5fd0' },
+  'Medium':    { ko: '보통',       pips: 2, c1: '#ffc85c', c2: '#d07a1e' },
+  'Hard':      { ko: '어려움',     pips: 3, c1: '#ff8a9c', c2: '#c2255c' },
+  'Very Hard': { ko: '매우 어려움', pips: 4, c1: '#c89cff', c2: '#6d28d9' }
+};
+const dif = d => DIFFS[d] || DIFFS.Easy;
+const FEAT_ART = {
+  surprise: 'question', connected: 'fChain', lock: 'lock', pipe: 'fPipe',
+  hammer: 'hammer', ice: 'ice', chain: 'fChain', totem: 'fTotem',
+  music: 'music', slotcage: 'fSlotCage', astro: 'fAstro', door: 'fSlotCage'
+};
+const FEAT_KO = {
+  surprise: '서프라이즈', connected: '연결', lock: '자물쇠', pipe: '파이프',
+  hammer: '해머', ice: '얼음', chain: '족쇄', totem: '토템', music: '말렛',
+  slotcage: '슬롯케이지', astro: '우주복', door: '컨베이어 문'
+};
+const SHOP = [
+  { k: 'hearts',   name: '하트 가득',   cost: 150, art: 'heart',     desc: '하트를 5개로 채운다' },
+  { k: 'shuffle',  name: '셔플',       cost: 60,  art: 'pwShuffle', desc: '큐 전체를 섞는다' },
+  { k: 'tray',     name: '트레이',     cost: 80,  art: 'tray',      desc: '맨 앞 하나를 빼 둔다' },
+  { k: 'hand',     name: '집게',       cost: 90,  art: 'pwHand',    desc: '큐 아무 자리나 하나 집는다' },
+  { k: 'demolish', name: '해머',       cost: 120, art: 'hammer',    desc: '반경 2칸을 부순다' },
+  { k: 'super',    name: '슈퍼 슈터',   cost: 180, art: 'pwSuper',   desc: '그 색 덩어리를 관통 사격' },
+  { k: 'slot',     name: '캐리지 +1',  cost: 200, art: 'pwSlot',    desc: '캐리지를 하나 늘린다' },
+  { k: 'gold',     name: '골드 +500',  cost: 0,   art: 'coin',      desc: '데모용 무료 지급. 결제 없음' }
+];
+
+let MAN = null, inHome = true;
+const PW0 = { shuffle: 1, hand: 1, super: 1, slot: 1, demolish: 1, tray: 1 };
+/* Heart refill. The APK does not ship this: a full scan of data.unity3d by
+   script class finds only `ResourceCaptureSystemEvents` ("Heart Resource
+   Capture System Events") and `BonusLevelResourceEarnEvents`, neither of which
+   carries a timing value, and `HeartNotificationStateProviderSo`'s
+   `heartGeneratorSettings` (+0x28) has no instance in the bundle - the heart
+   generator is server/remote config [X]. So these numbers are MINE: one heart
+   every 30 minutes up to 5, which is the genre default. */
+const HEART_MAX = 5, HEART_REFILL_MS = 30 * 60 * 1000;
+const META = Object.assign(
+  { cleared: [], hearts: 5, gold: 300, current: 1, heartAt: 0, pw: Object.assign({}, PW0) },
+  JSON.parse(localStorage.getItem('bb_meta') || '{}'));
+META.pw = Object.assign({}, PW0, META.pw);
+let cleared = new Set(META.cleared);
+const saveMeta = () => {
+  META.cleared = Array.from(cleared);
+  localStorage.setItem('bb_meta', JSON.stringify(META));
+};
+const sheet = (id, on) => $(id).classList[on ? 'add' : 'remove']('on');
+
+/* Roll the refill clock forward. `heartAt` is when the NEXT heart lands; each
+   whole interval that has passed since then grants one more. */
+function refillHearts(){
+  if (META.hearts >= HEART_MAX){ META.heartAt = 0; return; }
+  if (!META.heartAt){ META.heartAt = Date.now() + HEART_REFILL_MS; saveMeta(); return; }
+  let changed = false;
+  while (META.hearts < HEART_MAX && Date.now() >= META.heartAt){
+    META.hearts++;
+    META.heartAt += HEART_REFILL_MS;
+    changed = true;
+  }
+  if (META.hearts >= HEART_MAX) META.heartAt = 0;
+  if (changed) saveMeta();
+}
+const heartLeftMs = () => (META.hearts >= HEART_MAX || !META.heartAt)
+  ? 0 : Math.max(0, META.heartAt - Date.now());
+function spendHeart(){
+  META.hearts = Math.max(0, META.hearts - 1);
+  if (!META.heartAt) META.heartAt = Date.now() + HEART_REFILL_MS;   // clock starts on the first loss
+  saveMeta();
+}
+
+function syncMeta(){
+  refillHearts();
+  const left = heartLeftMs();
+  $('cHeart').textContent = META.hearts + (left
+    ? ' (' + Math.floor(left / 60000) + ':' + String(Math.floor(left / 1000) % 60).padStart(2, '0') + ')'
+    : '');
+  $('cGold').textContent  = META.gold;
+  $('cStar').textContent  = cleared.size;
+  $('icHeart').src = url(META.hearts ? 'heart' : 'heartEmpty');
+}
+
+const nodeTop = n => (LV_MAX - n) * NODE_H;
+
+function nodeHtml(r){
+  const d = dif(r.d), done = cleared.has(r.n), cur = r.n === META.current;
+  return '<div class="nd' + (done ? ' cl' : '') + (cur ? ' cur' : '')
+    + '" data-n="' + r.n + '" style="top:' + (nodeTop(r.n) + 14)
+    + 'px;--c1:' + d.c1 + ';--c2:' + d.c2 + '">'
+    + '<div class="hex"></div>'
+    + '<div class="hexIn"><span class="num">' + r.n + '</span></div>'
+    + '<div class="pips">' + '<i></i>'.repeat(d.pips) + '</div>'
+    + '<div class="ndName">' + (r.name || '') + '</div>'
+    + (done ? '<img class="done" src="' + url('check') + '">' : '')
+    + '</div>';
+}
+
+// only the visible slice of the map exists
+let win = [0, 0];
+function renderTree(force){
+  const sc = $('scroll'), tree = $('tree');
+  const h = sc.clientHeight || 400, top = sc.scrollTop;
+  const from = Math.max(1, LV_MAX - Math.ceil((top + h) / NODE_H) - 1);
+  const to   = Math.min(LV_MAX, LV_MAX - Math.floor(top / NODE_H) + 1);
+  if (!force && from === win[0] && to === win[1]) return;
+  win = [from, to];
+  let html = '';
+  for (let n = from; n <= to; n++) html += nodeHtml(MAN[n - 1]);
+  tree.querySelectorAll('.nd').forEach(e => e.remove());
+  tree.insertAdjacentHTML('beforeend', html);
+}
+
+function buildTreeChrome(){
+  const tree = $('tree');
+  tree.style.height = (LV_MAX * NODE_H + 40) + 'px';
+  const bands = [['#1b2a4d', '#141d3a'], ['#2a1b3f', '#1d1430'], ['#16302c', '#111f22']];
+  let html = '';
+  for (let b = 0; b * 100 < LV_MAX; b++){
+    const lo = b * 100 + 1, hi = Math.min(LV_MAX, lo + 99), c = bands[b % 3];
+    html += '<div class="band" style="top:' + nodeTop(hi) + 'px;height:'
+      + ((hi - lo + 1) * NODE_H) + 'px;background:linear-gradient('
+      + c[0] + ',' + c[1] + ')"></div>';
+  }
+  html += '<div class="spine" style="top:20px;height:' + (LV_MAX * NODE_H) + 'px"></div>';
+  tree.innerHTML = html;
+}
+
+function openCard(n){
+  const r = MAN[n - 1], d = dif(r.d);
+  $('cdArt').src = url('avatar');
+  $('cdNo').textContent = '레벨 ' + n;
+  $('cdDiff').textContent = d.ko;
+  $('cdDiff').style.setProperty('--c1', d.c1);
+  $('cdDiff').style.setProperty('--c2', d.c2);
+  $('cdStats').textContent = '픽셀 ' + r.px + ' · 캐리지 ' + r.slots
+    + ' · 벨트 한도 ' + r.lim + (cleared.has(n) ? ' · 클리어' : '');
+  const tags = Object.keys(r.f);
+  $('cdFeats').innerHTML = tags.length
+    ? tags.map(k => '<span class="fchip"><img src="' + url(FEAT_ART[k] || 'question')
+        + '">' + (FEAT_KO[k] || k) + ' ' + r.f[k] + '</span>').join('')
+    : '<span style="font-size:11px;color:var(--dim)">피처 없음</span>';
+  const noHeart = META.hearts <= 0;
+  $('cdPlay').disabled = noHeart;
+  $('cdPlay').textContent = noHeart ? '하트 없음' : 'PLAY';
+  $('cdPlay').onclick = () => { sheet('cardSheet', false); startLevel(n); };
+  sheet('cardSheet', true);
+}
+
+function buildShop(){
+  $('shopList').innerHTML = SHOP.map(it => {
+    const own = it.k === 'hearts' ? META.hearts + ' / 5'
+      : it.k === 'gold' ? '' : '보유 ' + (META.pw[it.k] || 0);
+    const can = META.gold >= it.cost && !(it.k === 'hearts' && META.hearts >= 5);
+    return '<div class="shopRow"><img src="' + url(it.art) + '">'
+      + '<div><div class="nm">' + it.name + '</div>'
+      + '<div class="ds">' + it.desc + '</div>'
+      + (own ? '<div class="own">' + own + '</div>' : '') + '</div>'
+      + '<button class="buy" data-k="' + it.k + '"' + (can ? '' : ' disabled') + '>'
+      + (it.cost ? '<img src="' + url('coin') + '">' + it.cost : '무료') + '</button></div>';
+  }).join('');
+  $('shopList').querySelectorAll('.buy').forEach(b => { b.onclick = () => buy(b.dataset.k); });
+}
+
+function buy(k){
+  const it = SHOP.find(x => x.k === k);
+  if (!it || META.gold < it.cost) return;
+  META.gold -= it.cost;
+  if (k === 'gold') META.gold += 500;
+  else if (k === 'hearts'){ META.hearts = HEART_MAX; META.heartAt = 0; }
+  else META.pw[k] = (META.pw[k] || 0) + 1;
+  saveMeta(); syncMeta(); buildShop();
+}
+
+function showHome(){
+  inHome = true;
+  document.body.classList.add('meta');
+  syncMeta();
+  const sc = $('scroll');
+  sc.scrollTop = Math.max(0, nodeTop(META.current) - sc.clientHeight / 2);
+  renderTree(true);
+}
+
+function startLevel(n){
+  inHome = false;
+  document.body.classList.remove('meta');
+  load(n);
+}
+
+// powerup spending has to reach the saved inventory, through both entry points
+const _usePowerup = usePowerup, _useTray = useTray;
+usePowerup = function(k){
+  const b = G.pw[k]; _usePowerup(k);
+  if (G.pw[k] < b){ META.pw[k] = G.pw[k]; saveMeta(); }
+};
+useTray = function(qi){
+  const b = G.pw.tray; _useTray(qi);
+  if (G.pw.tray < b){ META.pw.tray = G.pw.tray; saveMeta(); }
+};
+
+/* ---------------------------- belt speed ----------------------------
+   The measured belt is 5.0 world units/sec with the multiplier at 1.0 (9.1),
+   but at this on-screen scale it reads like the original's endgame from the
+   first second, so this build halves the base. The AutoFinisher's x2.0 then
+   lands back on the measured 5.0 for the last stretch - same shape as the
+   original, one notch slower throughout. Everything else about the
+   AutoFinisher (the latch, the wall detach, the path-end change) lives in the
+   shared core. */
+BELT_TUNE = 0.5;                             // mine, a tuning knob
+
+/* A spent shooter flies OUTWARD off the belt (mine). The original simply
+   removes it; drawing it drifting away from the picture keeps the last shot
+   from reading as the animal being pulled into the board. */
+const LEAVE_MS = 430;
+function leaveOutward(dragon, x, y){
+  const cx = L.gx + L.gw / 2, cy = L.gy + L.gh / 2;
+  let dx = x - cx, dy = y - cy;
+  const d = Math.hypot(dx, dy) || 1;
+  (G.leaving || (G.leaving = [])).push({
+    dragon: dragon, x: x, y: y, vx: dx / d * 210, vy: dy / d * 210,
+    spin: dx < 0 ? -1 : 1, t0: nowMs()
+  });
+}
+
+async function boot(){
+  $('avatar').innerHTML = '<img src="' + url('avatar') + '">';
+  $('icGold').src = url('coin');
+  $('icStar').src = url('star');
+  MAN = PACK_MAN;
+  buildTreeChrome(); buildShop();
+  $('scroll').addEventListener('scroll', () => renderTree(false));
+  $('tree').addEventListener('click', e => {
+    const nd = e.target.closest('.nd');
+    if (nd) openCard(+nd.dataset.n);
+  });
+  $('cdClose').onclick = () => sheet('cardSheet', false);
+  $('nvShop').onclick  = () => { buildShop(); sheet('shopSheet', true); };
+  $('shClose').onclick = () => sheet('shopSheet', false);
+  $('reset').onclick = () => {
+    if (!confirm('진행도(클리어·하트·골드·파워업)를 지운다')) return;
+    cleared = new Set();
+    Object.assign(META, { hearts: HEART_MAX, gold: 300, current: 1, heartAt: 0,
+                          pw: Object.assign({}, PW0) });
+    saveMeta(); buildShop(); showHome();
+  };
+  // walking out of a level in progress costs a heart, same as failing it
+  $('toHome').onclick = () => {
+    if (G && G.state === 'play'){
+      if (!confirm('레벨을 나가면 하트 1개가 사라진다. 나갈까?')) return;
+      spendHeart();
+    }
+    showHome();
+  };
+  $('ovHome').onclick = () => { $('overlay').classList.remove('on'); showHome(); };
+  addEventListener('resize', () => { if (inHome) renderTree(true); });
+  setInterval(() => { if (inHome){ refillHearts(); syncMeta(); } }, 1000);
+  showHome();
+}
+
+$('prev').onclick  = () => load((+$('lvl').value) - 1);
+$('next').onclick  = () => load((+$('lvl').value) + 1);
+$('retry').onclick = () => load(+$('lvl').value);
+$('lvl').onchange  = () => load(+$('lvl').value);
+$('mode').onclick  = () => {
+  COLUMN_SCAN = !COLUMN_SCAN;
+  $('mode').textContent = COLUMN_SCAN ? '가림' : '전체';
+  load(+$('lvl').value);
+};
+addEventListener('resize', () => layout());
+
+boot();
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
