@@ -397,7 +397,10 @@ def main():
         assert need == sup, (i, name, dict(need), dict(sup))
 
         raw = json.dumps(lvl, separators=(',', ':')).encode('utf-8')
-        blobs.append('gzip:' + base64.b64encode(gzip.compress(raw, 9)).decode())
+        # mtime=0: gzip stamps the current time into its header by default, which
+        # would make every rebuild produce a different pack and a noisy diff.
+        blob = gzip.compress(raw, 9, mtime=0)
+        blobs.append('gzip:' + base64.b64encode(blob).decode())
         man.append({'n': i, 'd': diff, 'slots': 5, 'lim': 5,
                     'px': len(pid['pixels']), 'name': name, 'f': {}})
         nsh = sum(len(q['shooters']) for q in lvl['QueueGroup']['shooterQueues'])

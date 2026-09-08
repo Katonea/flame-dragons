@@ -22,6 +22,7 @@ The page lands at `https://<user>.github.io/<repo>/`.
 | `index.html` | Everything: the ten levels, the art, the simulation, the lobby, the shop |
 | `pack/levels.js` | The generated level pack, inlined into `index.html` at build time |
 | `tools/make_pack.py` | Draws the ten pictures as ASCII grids and builds the pack |
+| `tools/inject_pack.py` | Swaps a rebuilt pack into `index.html` in place |
 | `tools/gen_levels.py` | Generates an abstract level set instead, if you want more |
 
 ## The levels
@@ -49,6 +50,16 @@ that decide whether a level is playable at all:
 
 Difficulty ramps with size and colour count: 새싹 (14×14, 3 colours, 92 pixels)
 through 드래곤 (20×19, 6 colours, 284 pixels).
+
+### Rebuilding them
+
+```bash
+python tools/make_pack.py && python tools/inject_pack.py
+```
+
+Edit a picture in `tools/make_pack.py` - its ASCII grid or its legend -
+then run those two and reload. The build is reproducible: run it twice and the
+second run reports nothing to do.
 
 ## Art
 
