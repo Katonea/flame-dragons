@@ -7,3 +7,8 @@ levels-own/
 tools/vary_levels.py
 __pycache__/
 *.pyc
+
+# Generated output, one JSON per level. Rebuilt by tools/make_pack.py; the
+# readable source of a picture is its ASCII grid in tools/pictures.py, so
+# these are for local diffing only and would be 4 MB of duplicate in git.
+levels-json/

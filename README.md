@@ -1,7 +1,7 @@
 # Flame Dragons
 
 A conveyor shooter in **one HTML file**. Queues of dragons ride a belt around a
-pixel picture and breathe fire at it; you decide who boards and when. Ten
+pixel picture and breathe fire at it; you decide who boards and when. Fifty
 pictures, no dependencies, no network requests of any kind.
 
 ## Run it
@@ -19,16 +19,17 @@ The page lands at `https://<user>.github.io/<repo>/`.
 
 | Path | What it is |
 |---|---|
-| `index.html` | Everything: the ten levels, the art, the simulation, the lobby, the shop |
+| `index.html` | Everything: the fifty levels, the art, the simulation, the lobby, the shop |
 | `pack/levels.js` | The generated level pack, inlined into `index.html` at build time |
-| `levels-json/*.json` | The same ten levels unpacked - readable, diffable JSON |
-| `tools/make_pack.py` | Draws the ten pictures as ASCII grids and builds the pack |
+| `tools/pictures.py` | The fifty pictures, as ASCII grids - the readable source |
+| `tools/make_pack.py` | Doubles each grid, derives the shooters, builds the pack |
 | `tools/inject_pack.py` | Swaps a rebuilt pack into `index.html` in place |
 | `tools/gen_levels.py` | Generates an abstract level set instead, if you want more |
+| `levels-json/*.json` | Each built level as plain JSON. Generated, and git-ignored: it is 4 MB of duplicate |
 
 ## The levels
 
-The ten pictures are drawn by hand in `tools/make_pack.py` as ASCII grids — one
+The fifty pictures are drawn by hand in `tools/pictures.py` as ASCII grids — one
 character per pixel, a legend mapping each character to a palette id:
 
 ```
@@ -49,16 +50,27 @@ that decide whether a level is playable at all:
   `peel()` strips the picture the way the game does and asserts every pass
   removes something, which proves no colour is trapped forever.
 
-Difficulty ramps with size and colour count: 새싹 (14×14, 3 colours, 92 pixels)
-through 드래곤 (20×19, 6 colours, 284 pixels).
+### Scale
+
+The grids are drawn at **half** the shipping resolution and doubled at build
+time by `scale2x` — the EPX rule, so a 45° step rounds off instead of becoming a
+staircase twice as chunky. That is deliberate. A level of this genre runs around
+36×44 cells and on the order of 1 300 pixels; a grid that size is miserable to
+draw and diff by hand, and a 20×19 one plays as a quarter of a level. Drawing at
+half scale keeps the source readable while the shipped picture lands where it
+belongs: 20×32 up to 52×52, 290 to 1 795 pixels, 14 to 85 shooters.
+
+Difficulty ramps with size and colour count: 새싹 (28×28, 3 colours, 366 pixels)
+through 케이크 (46×46, 6 colours, 1 795 pixels).
 
 ### Reading them
 
-The pack is gzipped and base64d, so `levels-json/` carries the same ten levels
-as plain JSON for reading and diffing. Both come out of the same build and are
-checked against each other, but the JSON is **output, not input** - the game
-loads the inlined pack and never fetches these. To change a level, edit its
-ASCII grid and rebuild.
+The pack is gzipped and base64d, so a build also drops every level into
+`levels-json/` as plain JSON for reading and diffing. That directory is
+generated and git-ignored — fifty levels at this scale is 4 MB of duplicate, and
+the readable source of a picture is its ASCII grid in `tools/pictures.py`. The
+JSON is **output, not input**: the game loads the inlined pack and never fetches
+it. To change a level, edit its ASCII grid and rebuild.
 
 ### Rebuilding them
 
@@ -66,7 +78,7 @@ ASCII grid and rebuild.
 python tools/make_pack.py && python tools/inject_pack.py
 ```
 
-Edit a picture in `tools/make_pack.py` - its ASCII grid or its legend -
+Edit a picture in `tools/pictures.py` - its ASCII grid or its legend -
 then run those two and reload. The build is reproducible: run it twice and the
 second run reports nothing to do.
 
